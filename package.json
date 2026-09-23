@@ -1,0 +1,27 @@
+{
+  "name": "lockflow-backend",
+  "version": "0.1.0",
+  "description": "A backend API for managing shared room reservations across multiple organizations.",
+  "private": true,
+  "license": "MIT",
+  "type": "commonjs",
+  "scripts": {
+    "start:dev": "nest start --watch",
+    "build": "nest build",
+    "start:prod": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.1.0",
+    "@nestjs/core": "^12.1.0",
+    "@nestjs/platform-express": "^12.1.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^12.0.5",
+    "@types/node": "^24.13.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
