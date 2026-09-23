@@ -271,3 +271,29 @@ A platform administrator cannot create another `platform_admin` through regular 
 ### BR-34 — Reactivation is outside the scope of the first version
 
 The first version does not provide operations to reactivate users, rooms, or organizations after they have been deactivated.
+
+## 11. Identifier Rules
+
+### BR-35 — Room identifiers must use a stable URL-safe format
+
+A room identifier must contain between 1 and 40 characters.
+
+It may contain only:
+
+- lowercase letters from `a` to `z`;
+- numbers from `0` to `9`;
+- hyphens.
+
+Examples of valid identifiers:
+
+- `room-a`;
+- `meeting-room-1`;
+- `room-123`.
+
+Examples of invalid identifiers:
+
+- `Room A`;
+- `room_a`;
+- `room!`;
+- an empty identifier;
+- an identifier longer than 40 characters.

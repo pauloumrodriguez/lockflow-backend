@@ -330,3 +330,11 @@ The scenarios use the Given–When–Then format:
 **When** an administrator looks for a reactivation operation  
 **Then** no such operation is available in the first version  
 **And** the inactive record remains preserved.
+
+## 7. Identifier Scenarios
+
+### AS-47 — Reject an invalid room identifier
+
+**Given** Ana is creating a reservation  
+**When** she provides a room identifier containing spaces or uppercase letters  
+**Then** the system rejects the reservation as invalid.
