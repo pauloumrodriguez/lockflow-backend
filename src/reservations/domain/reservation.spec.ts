@@ -161,6 +161,47 @@ test("rejects an invalid room identifier", () => {
   );
 });
 
+for (const { description, roomId } of [
+  { description: "an empty room identifier", roomId: "" },
+  {
+    description: "a room identifier containing an underscore",
+    roomId: "room_a",
+  },
+  {
+    description: "a room identifier longer than 40 characters",
+    roomId: "a".repeat(41),
+  },
+]) {
+  test(`rejects ${description}`, () => {
+    assert.throws(
+      () =>
+        Reservation.create({
+          id: "reservation-invalid-room-id",
+          roomId,
+          startAt: "2030-05-10T10:00:00Z",
+          endAt: "2030-05-10T11:00:00Z",
+        }),
+      {
+        constructor: InvalidReservationError,
+        code: ReservationErrorCode.InvalidRoomId,
+      },
+    );
+  });
+}
+
+test("accepts a room identifier with exactly 40 valid characters", () => {
+  const roomId = "a".repeat(40);
+
+  const reservation = Reservation.create({
+    id: "reservation-40-character-room-id",
+    roomId,
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  assert.equal(reservation.roomId, roomId);
+});
+
 for (const field of ["startAt", "endAt"] as const) {
   test(`rejects calendar rollover in ${field}`, () => {
     const input = {
@@ -226,4 +267,76 @@ test("protects its interval when a caller modifies returned dates", () => {
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
+});
+
+test("detects overlapping intervals in the same room", () => {
+  const first = Reservation.create({
+    id: "reservation-overlap-first",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  const second = Reservation.create({
+    id: "reservation-overlap-second",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:30:00Z",
+    endAt: "2030-05-10T11:30:00Z",
+  });
+
+  assert.equal(first.overlaps(second), true);
+  assert.equal(second.overlaps(first), true);
+});
+
+test("allows adjacent intervals in the same room", () => {
+  const first = Reservation.create({
+    id: "reservation-adjacent-first",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  const second = Reservation.create({
+    id: "reservation-adjacent-second",
+    roomId: "room-a",
+    startAt: "2030-05-10T11:00:00Z",
+    endAt: "2030-05-10T12:00:00Z",
+  });
+
+  assert.equal(first.overlaps(second), false);
+  assert.equal(second.overlaps(first), false);
+});
+
+test("does not overlap equal intervals in different rooms", () => {
+  const first = Reservation.create({
+    id: "reservation-room-a",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  const second = Reservation.create({
+    id: "reservation-room-b",
+    roomId: "room-b",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  assert.equal(first.overlaps(second), false);
+  assert.equal(second.overlaps(first), false);
+});
+
+test("detects a reservation contained within another reservation", () => {
+  const outer = Reservation.create({
+    id: "reservation-outer",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T12:00:00Z",
+  });
+  const inner = Reservation.create({
+    id: "reservation-inner",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:30:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  assert.equal(outer.overlaps(inner), true);
+  assert.equal(inner.overlaps(outer), true);
 });

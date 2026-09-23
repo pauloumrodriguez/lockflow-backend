@@ -152,6 +152,18 @@ export class Reservation {
     return new Date(this.#endMs);
   }
 
+  /*
+   * Reservations overlap only when they compete for the same room and their
+   * half-open intervals share time. Touching boundaries remain available.
+   */
+  overlaps(other: Reservation): boolean {
+    return (
+      this.roomId === other.roomId &&
+      this.#startMs < other.#endMs &&
+      other.#startMs < this.#endMs
+    );
+  }
+
   toJSON(): ReservationSnapshot {
     return {
       id: this.id,
