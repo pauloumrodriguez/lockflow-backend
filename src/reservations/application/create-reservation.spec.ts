@@ -5,6 +5,9 @@ import { Reservation, ReservationStatus } from "../domain/reservation";
 import {
   type AuthenticatedUser,
   type AuthenticationContext,
+  UserRole,
+} from "../../authentication/application/authentication-context";
+import {
   type Clock,
   CreateReservation,
   CreateReservationError,
@@ -106,6 +109,7 @@ function createTestContext(options: TestContextOptions = {}) {
       options.authenticatedUser ?? {
         userId: "user-ana",
         organizationId: "organization-a",
+        role: UserRole.Member,
       },
     ),
     clock: new FixedClock(
@@ -290,6 +294,7 @@ test("uses authenticated ownership even when extra owner fields are supplied", a
     authenticatedUser: {
       userId: "user-bruno",
       organizationId: "organization-b",
+      role: UserRole.Member,
     },
   });
 
@@ -383,4 +388,28 @@ test("creates a reservation in the time interval of a cancelled reservation", as
     repository.reservations.map((reservation) => reservation.toJSON()),
     [cancelledSnapshot, result],
   );
+});
+
+test("rejects regular reservation creation by a platform administrator", async () => {
+  const { repository, createReservation } = createTestContext({
+    authenticatedUser: {
+      userId: "platform-admin-patricia",
+      role: UserRole.PlatformAdmin,
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      createReservation.execute({
+        roomId: "room-a",
+        startAt: "2030-05-10T10:00:00Z",
+        endAt: "2030-05-10T11:00:00Z",
+      }),
+    {
+      constructor: CreateReservationError,
+      code: CreateReservationErrorCode.PlatformAdministratorNotAllowed,
+    },
+  );
+
+  assert.equal(repository.reservations.length, 0);
 });

@@ -2,6 +2,11 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import {
+  type AuthenticatedUser,
+  type AuthenticationContext,
+  UserRole,
+} from "../../authentication/application/authentication-context";
+import {
   InvalidReservationError,
   Reservation,
   ReservationErrorCode,
@@ -54,14 +59,46 @@ class InMemoryReservationRepository implements ReservationRepository {
   }
 }
 
-function createReservation(id = "reservation-1"): Reservation {
+class FixedAuthenticationContext implements AuthenticationContext {
+  constructor(private readonly authenticatedUser: AuthenticatedUser) {}
+
+  getAuthenticatedUser(): AuthenticatedUser {
+    return { ...this.authenticatedUser };
+  }
+}
+
+interface TestReservationOptions {
+  readonly id?: string;
+  readonly organizationId?: string;
+  readonly createdByUserId?: string;
+}
+
+const MEMBER_ANA: AuthenticatedUser = {
+  userId: "user-ana",
+  organizationId: "organization-a",
+  role: UserRole.Member,
+};
+
+function createReservation(
+  options: TestReservationOptions = {},
+): Reservation {
   return Reservation.create({
-    id,
+    id: options.id ?? "reservation-1",
     roomId: "room-a",
-    organizationId: "organization-a",
-    createdByUserId: "user-ana",
+    organizationId: options.organizationId ?? "organization-a",
+    createdByUserId: options.createdByUserId ?? "user-ana",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
+  });
+}
+
+function createCancelReservation(
+  repository: ReservationRepository,
+  authenticatedUser: AuthenticatedUser = MEMBER_ANA,
+): CancelReservation {
+  return new CancelReservation({
+    repository,
+    authenticationContext: new FixedAuthenticationContext(authenticatedUser),
   });
 }
 
@@ -72,7 +109,7 @@ function createReservation(id = "reservation-1"): Reservation {
 test("cancels and saves an active reservation", async () => {
   const reservation = createReservation();
   const repository = new InMemoryReservationRepository([reservation]);
-  const cancelReservation = new CancelReservation(repository);
+  const cancelReservation = createCancelReservation(repository);
 
   const result = await cancelReservation.execute({
     reservationId: reservation.id,
@@ -94,7 +131,7 @@ test("cancels and saves an active reservation", async () => {
 
 test("rejects cancellation when the reservation does not exist", async () => {
   const repository = new InMemoryReservationRepository();
-  const cancelReservation = new CancelReservation(repository);
+  const cancelReservation = createCancelReservation(repository);
 
   await assert.rejects(
     () =>
@@ -114,7 +151,7 @@ test("rejects cancellation when the reservation is already cancelled", async () 
   const reservation = createReservation();
   reservation.cancel();
   const repository = new InMemoryReservationRepository([reservation]);
-  const cancelReservation = new CancelReservation(repository);
+  const cancelReservation = createCancelReservation(repository);
 
   await assert.rejects(
     () =>
@@ -129,4 +166,112 @@ test("rejects cancellation when the reservation is already cancelled", async () 
 
   assert.equal(repository.saveCalls, 0);
   assert.equal(reservation.status, ReservationStatus.Cancelled);
+});
+
+test("rejects a member cancelling another member's reservation", async () => {
+  const reservation = createReservation({ createdByUserId: "user-bruno" });
+  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelReservation = createCancelReservation(repository);
+
+  await assert.rejects(
+    () =>
+      cancelReservation.execute({
+        reservationId: reservation.id,
+      }),
+    {
+      constructor: CancelReservationError,
+      code: CancelReservationErrorCode.NotAllowed,
+    },
+  );
+
+  assert.equal(repository.saveCalls, 0);
+  assert.equal(reservation.status, ReservationStatus.Active);
+});
+
+test("allows an organization administrator to cancel within their organization", async () => {
+  const reservation = createReservation({ createdByUserId: "user-bruno" });
+  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelReservation = createCancelReservation(repository, {
+    userId: "organization-admin-olivia",
+    organizationId: "organization-a",
+    role: UserRole.OrganizationAdmin,
+  });
+
+  const result = await cancelReservation.execute({
+    reservationId: reservation.id,
+  });
+
+  assert.equal(result.status, ReservationStatus.Cancelled);
+  assert.equal(repository.saveCalls, 1);
+});
+
+test("hides another organization's reservation from a member", async () => {
+  const reservation = createReservation({
+    organizationId: "organization-b",
+    createdByUserId: "user-bruno",
+  });
+  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelReservation = createCancelReservation(repository);
+
+  await assert.rejects(
+    () =>
+      cancelReservation.execute({
+        reservationId: reservation.id,
+      }),
+    {
+      constructor: CancelReservationError,
+      code: CancelReservationErrorCode.NotFound,
+      message: "The requested reservation was not found.",
+    },
+  );
+
+  assert.equal(repository.saveCalls, 0);
+  assert.equal(reservation.status, ReservationStatus.Active);
+});
+
+test("hides another organization's reservation from an organization administrator", async () => {
+  const reservation = createReservation({
+    organizationId: "organization-b",
+    createdByUserId: "user-bruno",
+  });
+  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelReservation = createCancelReservation(repository, {
+    userId: "organization-admin-olivia",
+    organizationId: "organization-a",
+    role: UserRole.OrganizationAdmin,
+  });
+
+  await assert.rejects(
+    () =>
+      cancelReservation.execute({
+        reservationId: reservation.id,
+      }),
+    {
+      constructor: CancelReservationError,
+      code: CancelReservationErrorCode.NotFound,
+      message: "The requested reservation was not found.",
+    },
+  );
+
+  assert.equal(repository.saveCalls, 0);
+  assert.equal(reservation.status, ReservationStatus.Active);
+});
+
+test("allows a platform administrator to explicitly cancel a reservation", async () => {
+  const reservation = createReservation({
+    organizationId: "organization-b",
+    createdByUserId: "user-bruno",
+  });
+  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelReservation = createCancelReservation(repository, {
+    userId: "platform-admin-patricia",
+    role: UserRole.PlatformAdmin,
+  });
+
+  const result = await cancelReservation.execute({
+    reservationId: reservation.id,
+  });
+
+  assert.equal(result.status, ReservationStatus.Cancelled);
+  assert.equal(repository.saveCalls, 1);
 });

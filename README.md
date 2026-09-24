@@ -44,11 +44,11 @@ The following technologies will be introduced gradually throughout the developme
 
 Stage 2 is complete: the NestJS application starts, and the reservation domain model is implemented and tested.
 
-Stage 3 is in progress. `CreateReservation` coordinates the domain through typed contracts for reservations, room availability, authenticated identity, time, and ID generation. It associates each reservation with the supplied identity and rejects unavailable rooms, starts in the past or more than 90 days ahead, and conflicts with active reservations. `CancelReservation` retrieves the entity through the shared repository contract, delegates the state transition to it, and saves the cancelled reservation without deleting its history.
+Stage 3 is in progress. `CreateReservation` coordinates the domain through typed contracts for reservations, room availability, authenticated identity, time, and ID generation. It associates each reservation with an organization user and rejects unavailable rooms, starts in the past or more than 90 days ahead, conflicts with active reservations, and regular creation attempts from platform administrators. `CancelReservation` retrieves the entity through the shared repository contract, enforces role and organization access, delegates the state transition to the entity, and saves the cancelled reservation without deleting its history.
 
 The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. Reservations start active and can be cancelled through the entity, preserving their data. A second cancellation is rejected. Only active reservations block overlapping periods in the same room; adjacent reservations are allowed.
 
-Real authentication, cancellation authorization, rescheduling, database persistence, and HTTP endpoints are still pending. Current tests provide the authenticated identity, room availability, and persistence through in-memory implementations. The separate conflict check and save do not yet prevent concurrent bookings; that guarantee will require atomic persistence.
+Credential authentication, account status checks, rescheduling, database persistence, and HTTP endpoints are still pending. Current tests provide authenticated identities, room availability, and persistence through in-memory implementations. The separate conflict check and save do not yet prevent concurrent bookings; that guarantee will require atomic persistence.
 
 ## Documentation
 
@@ -94,4 +94,4 @@ npm test
 npm run build
 ```
 
-The tests exercise the reservation's public behavior and the creation use case, including ownership, availability, booking boundaries, cancellation, and conflicts. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.
+The tests exercise the reservation's public behavior and its application use cases, including ownership, role authorization, organization isolation, availability, booking boundaries, cancellation, and conflicts. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.

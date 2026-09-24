@@ -1,4 +1,9 @@
 import { Reservation, type ReservationSnapshot } from "../domain/reservation";
+import {
+  type AuthenticatedOrganizationUser,
+  type AuthenticationContext,
+  UserRole,
+} from "../../authentication/application/authentication-context";
 import type { ReservationRepository } from "./reservation-repository";
 
 const MAX_RESERVATION_ADVANCE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -20,15 +25,6 @@ export interface CreateReservationRequest {
  */
 export interface RoomAvailability {
   isReservable(roomId: string): Promise<boolean>;
-}
-
-export interface AuthenticatedUser {
-  readonly userId: string;
-  readonly organizationId: string;
-}
-
-export interface AuthenticationContext {
-  getAuthenticatedUser(): AuthenticatedUser;
 }
 
 export interface Clock {
@@ -53,6 +49,7 @@ export const CreateReservationErrorCode = {
   StartTooFarInAdvance: "START_TOO_FAR_IN_ADVANCE",
   Overlap: "RESERVATION_OVERLAP",
   RoomUnavailable: "ROOM_UNAVAILABLE",
+  PlatformAdministratorNotAllowed: "PLATFORM_ADMIN_RESERVATION_NOT_ALLOWED",
 } as const;
 
 export type CreateReservationErrorCode =
@@ -79,8 +76,7 @@ export class CreateReservation {
   async execute(
     request: CreateReservationRequest,
   ): Promise<ReservationSnapshot> {
-    const authenticatedUser =
-      this.dependencies.authenticationContext.getAuthenticatedUser();
+    const authenticatedUser = this.getAuthenticatedOrganizationUser();
     const reservation = Reservation.create({
       id: this.dependencies.idGenerator.generate(),
       roomId: request.roomId,
@@ -110,6 +106,20 @@ export class CreateReservation {
         "The requested room is unavailable.",
       );
     }
+  }
+
+  private getAuthenticatedOrganizationUser(): AuthenticatedOrganizationUser {
+    const authenticatedUser =
+      this.dependencies.authenticationContext.getAuthenticatedUser();
+
+    if (authenticatedUser.role === UserRole.PlatformAdmin) {
+      throw new CreateReservationError(
+        CreateReservationErrorCode.PlatformAdministratorNotAllowed,
+        "Platform administrators cannot create regular reservations.",
+      );
+    }
+
+    return authenticatedUser;
   }
 
   private ensureStartIsWithinBookingWindow(startAt: Date): void {
