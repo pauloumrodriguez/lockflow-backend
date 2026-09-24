@@ -44,7 +44,7 @@ The following technologies will be introduced gradually throughout the developme
 
 Stage 2 is complete: the NestJS application starts, and the reservation domain model is implemented and tested.
 
-Stage 3 has not started. The next step is the application layer, beginning with tests for a `CreateReservation` use case, an explicit current-time dependency, and repository contracts supported by in-memory test doubles.
+Stage 3 is in progress. The first application use case, `CreateReservation`, coordinates the reservation domain through explicit repository, clock, and ID generator contracts. It rejects reservations in the past, more than 90 days in advance, or overlapping another reservation in the same room.
 
 The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. It also detects overlapping periods in the same room while allowing adjacent reservations.
 

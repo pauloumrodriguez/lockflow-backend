@@ -10,7 +10,7 @@
     "build": "nest build",
     "start:prod": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/reservations/domain/reservation.spec.js"
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/**/*.spec.js\""
   },
   "dependencies": {
     "@nestjs/common": "^12.1.0",
