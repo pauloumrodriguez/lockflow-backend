@@ -1,10 +1,24 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
+  CreateReservationInput,
   InvalidReservationError,
   Reservation,
   ReservationErrorCode,
 } from "./reservation";
+
+type TestReservationInput = Omit<
+  CreateReservationInput,
+  "organizationId" | "createdByUserId"
+>;
+
+function createTestReservation(input: TestReservationInput): Reservation {
+  return Reservation.create({
+    ...input,
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
+  });
+}
 
 /*
  * These examples describe accepted reservations and the rule behind each refusal.
@@ -12,7 +26,7 @@ import {
  * interval after validation.
  */
 test("creates a reservation with a valid time interval", () => {
-  const reservation = Reservation.create({
+  const reservation = createTestReservation({
     id: "reservation-1",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
@@ -22,6 +36,8 @@ test("creates a reservation with a valid time interval", () => {
   assert.deepEqual(reservation.toJSON(), {
     id: "reservation-1",
     roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
@@ -30,7 +46,7 @@ test("creates a reservation with a valid time interval", () => {
 test("rejects a reservation when the start is after the end", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-2",
         roomId: "room-a",
         startAt: "2030-05-10T11:00:00Z",
@@ -46,7 +62,7 @@ test("rejects a reservation when the start is after the end", () => {
 test("rejects dates that are not in UTC ISO 8601 format", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-3",
         roomId: "room-a",
         startAt: "2030-05-10T10:00:00Z",
@@ -62,7 +78,7 @@ test("rejects dates that are not in UTC ISO 8601 format", () => {
 test("rejects dates that do not exist", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-4",
         roomId: "room-a",
         startAt: "2030-13-10T10:00:00Z",
@@ -78,7 +94,7 @@ test("rejects dates that do not exist", () => {
 test("rejects a reservation shorter than 15 minutes", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-5",
         roomId: "room-a",
         startAt: "2030-05-10T10:00:00Z",
@@ -94,7 +110,7 @@ test("rejects a reservation shorter than 15 minutes", () => {
 test("rejects a reservation longer than 8 hours", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-6",
         roomId: "room-a",
         startAt: "2030-05-10T10:00:00Z",
@@ -109,7 +125,7 @@ test("rejects a reservation longer than 8 hours", () => {
 
 test("accepts a reservation lasting exactly 8 hours", () => {
   assert.doesNotThrow(() =>
-    Reservation.create({
+    createTestReservation({
       id: "reservation-7",
       roomId: "room-a",
       startAt: "2030-05-10T10:00:00Z",
@@ -120,7 +136,7 @@ test("accepts a reservation lasting exactly 8 hours", () => {
 
 test("accepts a reservation lasting exactly 15 minutes", () => {
   assert.doesNotThrow(() =>
-    Reservation.create({
+    createTestReservation({
       id: "reservation-8",
       roomId: "room-a",
       startAt: "2030-05-10T10:00:00Z",
@@ -132,7 +148,7 @@ test("accepts a reservation lasting exactly 15 minutes", () => {
 test("rejects a reservation when start and end are equal", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-9",
         roomId: "room-a",
         startAt: "2030-05-10T10:00:00Z",
@@ -148,7 +164,7 @@ test("rejects a reservation when start and end are equal", () => {
 test("rejects an invalid room identifier", () => {
   assert.throws(
     () =>
-      Reservation.create({
+      createTestReservation({
         id: "reservation-10",
         roomId: "Room A",
         startAt: "2030-05-10T10:00:00Z",
@@ -175,7 +191,7 @@ for (const { description, roomId } of [
   test(`rejects ${description}`, () => {
     assert.throws(
       () =>
-        Reservation.create({
+        createTestReservation({
           id: "reservation-invalid-room-id",
           roomId,
           startAt: "2030-05-10T10:00:00Z",
@@ -192,7 +208,7 @@ for (const { description, roomId } of [
 test("accepts a room identifier with exactly 40 valid characters", () => {
   const roomId = "a".repeat(40);
 
-  const reservation = Reservation.create({
+  const reservation = createTestReservation({
     id: "reservation-40-character-room-id",
     roomId,
     startAt: "2030-05-10T10:00:00Z",
@@ -212,7 +228,7 @@ for (const field of ["startAt", "endAt"] as const) {
       [field]: "2030-02-30T10:00:00Z",
     };
 
-    assert.throws(() => Reservation.create(input), {
+    assert.throws(() => createTestReservation(input), {
       constructor: InvalidReservationError,
       code: ReservationErrorCode.InvalidCalendarDate,
     });
@@ -220,7 +236,7 @@ for (const field of ["startAt", "endAt"] as const) {
 }
 
 test("accepts February 29 in a leap year", () => {
-  const reservation = Reservation.create({
+  const reservation = createTestReservation({
     id: "reservation-leap-year",
     roomId: "room-a",
     startAt: "2032-02-29T10:00:00Z",
@@ -232,7 +248,7 @@ test("accepts February 29 in a leap year", () => {
 
 for (const fraction of ["", ".1", ".12", ".123"]) {
   test(`normalizes UTC timestamps with fraction "${fraction}"`, () => {
-    const reservation = Reservation.create({
+    const reservation = createTestReservation({
       id: "reservation-fraction",
       roomId: "room-a",
       startAt: `2030-05-10T10:00:00${fraction}Z`,
@@ -248,7 +264,7 @@ for (const fraction of ["", ".1", ".12", ".123"]) {
 }
 
 test("protects its interval when a caller modifies returned dates", () => {
-  const reservation = Reservation.create({
+  const reservation = createTestReservation({
     id: "reservation-protected",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
@@ -261,19 +277,21 @@ test("protects its interval when a caller modifies returned dates", () => {
   assert.deepEqual(reservation.toJSON(), {
     id: "reservation-protected",
     roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
 });
 
 test("detects overlapping intervals in the same room", () => {
-  const first = Reservation.create({
+  const first = createTestReservation({
     id: "reservation-overlap-first",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
-  const second = Reservation.create({
+  const second = createTestReservation({
     id: "reservation-overlap-second",
     roomId: "room-a",
     startAt: "2030-05-10T10:30:00Z",
@@ -285,13 +303,13 @@ test("detects overlapping intervals in the same room", () => {
 });
 
 test("allows adjacent intervals in the same room", () => {
-  const first = Reservation.create({
+  const first = createTestReservation({
     id: "reservation-adjacent-first",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
-  const second = Reservation.create({
+  const second = createTestReservation({
     id: "reservation-adjacent-second",
     roomId: "room-a",
     startAt: "2030-05-10T11:00:00Z",
@@ -303,13 +321,13 @@ test("allows adjacent intervals in the same room", () => {
 });
 
 test("does not overlap equal intervals in different rooms", () => {
-  const first = Reservation.create({
+  const first = createTestReservation({
     id: "reservation-room-a",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
-  const second = Reservation.create({
+  const second = createTestReservation({
     id: "reservation-room-b",
     roomId: "room-b",
     startAt: "2030-05-10T10:00:00Z",
@@ -321,13 +339,13 @@ test("does not overlap equal intervals in different rooms", () => {
 });
 
 test("detects a reservation contained within another reservation", () => {
-  const outer = Reservation.create({
+  const outer = createTestReservation({
     id: "reservation-outer",
     roomId: "room-a",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T12:00:00Z",
   });
-  const inner = Reservation.create({
+  const inner = createTestReservation({
     id: "reservation-inner",
     roomId: "room-a",
     startAt: "2030-05-10T10:30:00Z",
@@ -359,13 +377,13 @@ for (const { description, startAt, endAt, expected } of [
   },
 ]) {
   test(description, () => {
-    const first = Reservation.create({
+    const first = createTestReservation({
       id: "reservation-boundary-first",
       roomId: "room-a",
       startAt: "2030-05-10T10:00:00Z",
       endAt: "2030-05-10T11:00:00Z",
     });
-    const second = Reservation.create({
+    const second = createTestReservation({
       id: "reservation-boundary-second",
       roomId: "room-a",
       startAt,

@@ -17,9 +17,19 @@ export interface RoomAvailability {
   isReservable(roomId: string): Promise<boolean>;
 }
 
+export interface AuthenticatedUser {
+  readonly userId: string;
+  readonly organizationId: string;
+}
+
+export interface AuthenticationContext {
+  getAuthenticatedUser(): AuthenticatedUser;
+}
+
 export interface CreateReservationDependencies {
   readonly repository: ReservationRepository;
   readonly roomAvailability: RoomAvailability;
+  readonly authenticationContext: AuthenticationContext;
   readonly clock: Clock;
   readonly idGenerator: IdGenerator;
 }
@@ -58,9 +68,13 @@ export class CreateReservation {
   async execute(
     request: CreateReservationRequest,
   ): Promise<ReservationSnapshot> {
+    const authenticatedUser =
+      this.dependencies.authenticationContext.getAuthenticatedUser();
     const reservation = Reservation.create({
       id: this.dependencies.idGenerator.generate(),
       roomId: request.roomId,
+      organizationId: authenticatedUser.organizationId,
+      createdByUserId: authenticatedUser.userId,
       startAt: request.startAt,
       endAt: request.endAt,
     });

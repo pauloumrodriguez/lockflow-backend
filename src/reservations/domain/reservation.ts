@@ -1,6 +1,8 @@
 export interface CreateReservationInput {
   readonly id: string;
   readonly roomId: string;
+  readonly organizationId: string;
+  readonly createdByUserId: string;
   readonly startAt: string;
   readonly endAt: string;
 }
@@ -8,6 +10,8 @@ export interface CreateReservationInput {
 export interface ReservationSnapshot {
   readonly id: string;
   readonly roomId: string;
+  readonly organizationId: string;
+  readonly createdByUserId: string;
   readonly startAt: string;
   readonly endAt: string;
 }
@@ -59,6 +63,8 @@ export class Reservation {
   private constructor(
     readonly id: string,
     readonly roomId: string,
+    readonly organizationId: string,
+    readonly createdByUserId: string,
     period: ReservationPeriod,
   ) {
     this.#period = period;
@@ -72,7 +78,13 @@ export class Reservation {
       endAt: input.endAt,
     });
 
-    return new Reservation(input.id, input.roomId, period);
+    return new Reservation(
+      input.id,
+      input.roomId,
+      input.organizationId,
+      input.createdByUserId,
+      period,
+    );
   }
 
   get startAt(): Date {
@@ -93,6 +105,8 @@ export class Reservation {
     return {
       id: this.id,
       roomId: this.roomId,
+      organizationId: this.organizationId,
+      createdByUserId: this.createdByUserId,
       startAt: this.startAt.toISOString(),
       endAt: this.endAt.toISOString(),
     };

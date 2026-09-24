@@ -3,6 +3,8 @@ import { test } from "node:test";
 
 import { Reservation } from "../domain/reservation";
 import {
+  AuthenticatedUser,
+  AuthenticationContext,
   Clock,
   CreateReservation,
   CreateReservationError,
@@ -34,6 +36,23 @@ class InMemoryRoomAvailability implements RoomAvailability {
   }
 }
 
+const AUTHENTICATED_USER: AuthenticatedUser = {
+  userId: "user-ana",
+  organizationId: "organization-a",
+};
+
+class FixedAuthenticationContext implements AuthenticationContext {
+  constructor(private readonly authenticatedUser: AuthenticatedUser) {}
+
+  getAuthenticatedUser(): AuthenticatedUser {
+    return { ...this.authenticatedUser };
+  }
+}
+
+function createAuthenticationContext(): AuthenticationContext {
+  return new FixedAuthenticationContext(AUTHENTICATED_USER);
+}
+
 class FixedClock implements Clock {
   constructor(private readonly currentTime: Date) {}
 
@@ -50,12 +69,13 @@ class FixedIdGenerator implements IdGenerator {
   }
 }
 
-test("creates and saves a valid reservation", async () => {
+test("creates and saves a reservation for the authenticated user and organization", async () => {
   const repository = new InMemoryReservationRepository();
 
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T09:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-1"),
   });
@@ -69,6 +89,8 @@ test("creates and saves a valid reservation", async () => {
   assert.deepEqual(result, {
     id: "reservation-1",
     roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
@@ -83,6 +105,7 @@ test("rejects a reservation that starts in the past", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-10T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-2"),
   });
@@ -109,6 +132,7 @@ test("rejects a reservation more than 90 days in advance", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-3"),
   });
@@ -135,6 +159,7 @@ test("accepts a reservation exactly 90 days in advance", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-4"),
   });
@@ -155,6 +180,8 @@ test("rejects an overlapping reservation in the same room", async () => {
   const existingReservation = Reservation.create({
     id: "existing-reservation",
     roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-existing",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
@@ -164,6 +191,7 @@ test("rejects an overlapping reservation in the same room", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-5"),
   });
@@ -190,6 +218,8 @@ test("allows an adjacent reservation in the same room", async () => {
   const existingReservation = Reservation.create({
     id: "existing-reservation",
     roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-existing",
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
@@ -199,6 +229,7 @@ test("allows an adjacent reservation in the same room", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-6"),
   });
@@ -219,6 +250,7 @@ test("rejects a reservation when the room is unavailable", async () => {
   const createReservation = new CreateReservation({
     repository,
     roomAvailability: new InMemoryRoomAvailability(new Set()),
+    authenticationContext: createAuthenticationContext(),
     clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
     idGenerator: new FixedIdGenerator("reservation-7"),
   });
