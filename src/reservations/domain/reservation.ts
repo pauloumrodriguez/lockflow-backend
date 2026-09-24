@@ -12,6 +12,7 @@ export interface ReservationSnapshot {
   readonly roomId: string;
   readonly organizationId: string;
   readonly createdByUserId: string;
+  readonly status: ReservationStatus;
   readonly startAt: string;
   readonly endAt: string;
 }
@@ -21,6 +22,14 @@ interface CreateReservationPeriodInput {
   readonly endAt: string;
 }
 
+export const ReservationStatus = {
+  Active: "active",
+  Cancelled: "cancelled",
+} as const;
+
+export type ReservationStatus =
+  (typeof ReservationStatus)[keyof typeof ReservationStatus];
+
 // Named codes let callers identify a failed rule without comparing messages.
 export const ReservationErrorCode = {
   InvalidRoomId: "INVALID_ROOM_ID",
@@ -29,6 +38,7 @@ export const ReservationErrorCode = {
   InvalidTimeOrder: "INVALID_TIME_ORDER",
   DurationTooShort: "DURATION_TOO_SHORT",
   DurationTooLong: "DURATION_TOO_LONG",
+  AlreadyCancelled: "RESERVATION_ALREADY_CANCELLED",
 } as const;
 
 export type ReservationErrorCode =
@@ -59,6 +69,7 @@ const ISO_UTC_PATTERN =
  */
 export class Reservation {
   readonly #period: ReservationPeriod;
+  #status: ReservationStatus;
 
   private constructor(
     readonly id: string,
@@ -66,8 +77,10 @@ export class Reservation {
     readonly organizationId: string,
     readonly createdByUserId: string,
     period: ReservationPeriod,
+    status: ReservationStatus,
   ) {
     this.#period = period;
+    this.#status = status;
   }
 
   static create(input: CreateReservationInput): Reservation {
@@ -84,6 +97,7 @@ export class Reservation {
       input.organizationId,
       input.createdByUserId,
       period,
+      ReservationStatus.Active,
     );
   }
 
@@ -95,7 +109,26 @@ export class Reservation {
     return this.#period.endAt;
   }
 
+  get status(): ReservationStatus {
+    return this.#status;
+  }
+
+  cancel(): void {
+    if (!this.isActive()) {
+      throw new InvalidReservationError(
+        ReservationErrorCode.AlreadyCancelled,
+        "A cancelled reservation cannot be cancelled again.",
+      );
+    }
+
+    this.#status = ReservationStatus.Cancelled;
+  }
+
   overlaps(other: Reservation): boolean {
+    if (!this.isActive() || !other.isActive()) {
+      return false;
+    }
+
     const sameRoom = this.roomId === other.roomId;
 
     return sameRoom && this.#period.overlaps(other.#period);
@@ -107,9 +140,14 @@ export class Reservation {
       roomId: this.roomId,
       organizationId: this.organizationId,
       createdByUserId: this.createdByUserId,
+      status: this.status,
       startAt: this.startAt.toISOString(),
       endAt: this.endAt.toISOString(),
     };
+  }
+
+  private isActive(): boolean {
+    return this.#status === ReservationStatus.Active;
   }
 }
 

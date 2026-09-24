@@ -5,6 +5,7 @@ import {
   InvalidReservationError,
   Reservation,
   ReservationErrorCode,
+  ReservationStatus,
 } from "./reservation";
 
 type TestReservationInput = Omit<
@@ -38,6 +39,7 @@ test("creates a reservation with a valid time interval", () => {
     roomId: "room-a",
     organizationId: "organization-a",
     createdByUserId: "user-ana",
+    status: ReservationStatus.Active,
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
@@ -279,6 +281,7 @@ test("protects its interval when a caller modifies returned dates", () => {
     roomId: "room-a",
     organizationId: "organization-a",
     createdByUserId: "user-ana",
+    status: ReservationStatus.Active,
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
@@ -394,3 +397,62 @@ for (const { description, startAt, endAt, expected } of [
     assert.equal(second.overlaps(first), expected);
   });
 }
+
+test("cancels an active reservation and preserves its history", () => {
+  const reservation = createTestReservation({
+    id: "reservation-to-cancel",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  reservation.cancel();
+
+  assert.deepEqual(reservation.toJSON(), {
+    id: "reservation-to-cancel",
+    roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
+    status: ReservationStatus.Cancelled,
+    startAt: "2030-05-10T10:00:00.000Z",
+    endAt: "2030-05-10T11:00:00.000Z",
+  });
+});
+
+test("rejects cancelling an already cancelled reservation", () => {
+  const reservation = createTestReservation({
+    id: "cancelled-reservation",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  reservation.cancel();
+
+  assert.throws(() => reservation.cancel(), {
+    constructor: InvalidReservationError,
+    code: ReservationErrorCode.AlreadyCancelled,
+  });
+});
+
+test("a cancelled reservation no longer blocks its time interval", () => {
+  const cancelledReservation = createTestReservation({
+    id: "cancelled-reservation",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  const activeReservation = createTestReservation({
+    id: "active-reservation",
+    roomId: "room-a",
+    startAt: "2030-05-10T10:30:00Z",
+    endAt: "2030-05-10T11:30:00Z",
+  });
+
+  assert.equal(cancelledReservation.overlaps(activeReservation), true);
+
+  cancelledReservation.cancel();
+
+  assert.equal(cancelledReservation.overlaps(activeReservation), false);
+  assert.equal(activeReservation.overlaps(cancelledReservation), false);
+});

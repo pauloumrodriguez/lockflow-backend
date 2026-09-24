@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
-import { Reservation } from "../domain/reservation";
+import { Reservation, ReservationStatus } from "../domain/reservation";
 import {
   AuthenticatedUser,
   AuthenticationContext,
@@ -91,6 +91,7 @@ test("creates and saves a reservation for the authenticated user and organizatio
     roomId: "room-a",
     organizationId: "organization-a",
     createdByUserId: "user-ana",
+    status: ReservationStatus.Active,
     startAt: "2030-05-10T10:00:00.000Z",
     endAt: "2030-05-10T11:00:00.000Z",
   });
