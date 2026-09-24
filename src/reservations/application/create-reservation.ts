@@ -13,6 +13,17 @@ export interface ReservationRepository {
   save(reservation: Reservation): Promise<void>;
 }
 
+export interface RoomAvailability {
+  isReservable(roomId: string): Promise<boolean>;
+}
+
+export interface CreateReservationDependencies {
+  readonly repository: ReservationRepository;
+  readonly roomAvailability: RoomAvailability;
+  readonly clock: Clock;
+  readonly idGenerator: IdGenerator;
+}
+
 export interface Clock {
   now(): Date;
 }
@@ -21,16 +32,11 @@ export interface IdGenerator {
   generate(): string;
 }
 
-export interface CreateReservationDependencies {
-  readonly repository: ReservationRepository;
-  readonly clock: Clock;
-  readonly idGenerator: IdGenerator;
-}
-
 export const CreateReservationErrorCode = {
   StartInPast: "START_IN_PAST",
   StartTooFarInAdvance: "START_TOO_FAR_IN_ADVANCE",
   Overlap: "RESERVATION_OVERLAP",
+  RoomUnavailable: "ROOM_UNAVAILABLE",
 } as const;
 
 export type CreateReservationErrorCode =
@@ -58,6 +64,16 @@ export class CreateReservation {
       startAt: request.startAt,
       endAt: request.endAt,
     });
+
+    const isRoomReservable =
+      await this.dependencies.roomAvailability.isReservable(request.roomId);
+
+    if (!isRoomReservable) {
+      throw new CreateReservationError(
+        CreateReservationErrorCode.RoomUnavailable,
+        "The requested room is unavailable.",
+      );
+    }
 
     const currentTimeMs = this.dependencies.clock.now().getTime();
     const reservationStartMs = reservation.startAt.getTime();
