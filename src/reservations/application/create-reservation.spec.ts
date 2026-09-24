@@ -10,9 +10,9 @@ import {
   CreateReservationError,
   CreateReservationErrorCode,
   type IdGenerator,
-  type ReservationRepository,
   type RoomAvailability,
 } from "./create-reservation";
+import type { ReservationRepository } from "./reservation-repository";
 
 /*
  * Here, in-memory collaborators make room and reservation data predictable.
@@ -22,6 +22,12 @@ import {
 class InMemoryReservationRepository implements ReservationRepository {
   readonly reservations: Reservation[] = [];
 
+  async findById(id: string): Promise<Reservation | null> {
+    return (
+      this.reservations.find((reservation) => reservation.id === id) ?? null
+    );
+  }
+
   async hasOverlap(reservation: Reservation): Promise<boolean> {
     return this.reservations.some((savedReservation) =>
       savedReservation.overlaps(reservation),
@@ -29,7 +35,16 @@ class InMemoryReservationRepository implements ReservationRepository {
   }
 
   async save(reservation: Reservation): Promise<void> {
-    this.reservations.push(reservation);
+    const savedIndex = this.reservations.findIndex(
+      (savedReservation) => savedReservation.id === reservation.id,
+    );
+
+    if (savedIndex === -1) {
+      this.reservations.push(reservation);
+      return;
+    }
+
+    this.reservations[savedIndex] = reservation;
   }
 }
 

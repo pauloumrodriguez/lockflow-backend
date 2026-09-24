@@ -1,4 +1,5 @@
 import { Reservation, type ReservationSnapshot } from "../domain/reservation";
+import type { ReservationRepository } from "./reservation-repository";
 
 const MAX_RESERVATION_ADVANCE_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -17,11 +18,6 @@ export interface CreateReservationRequest {
  * Tests supply controlled implementations; infrastructure will later connect
  * them to persistence, authentication, room records, and the system clock.
  */
-export interface ReservationRepository {
-  hasOverlap(reservation: Reservation): Promise<boolean>;
-  save(reservation: Reservation): Promise<void>;
-}
-
 export interface RoomAvailability {
   isReservable(roomId: string): Promise<boolean>;
 }
