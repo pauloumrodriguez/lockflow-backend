@@ -44,11 +44,11 @@ The following technologies will be introduced gradually throughout the developme
 
 Stage 2 is complete: the NestJS application starts, and the reservation domain model is implemented and tested.
 
-Stage 3 is in progress. The first application use case, `CreateReservation`, coordinates the reservation domain through explicit repository, clock, and ID generator contracts. It rejects reservations in the past, more than 90 days in advance, or overlapping another reservation in the same room.
+Stage 3 is in progress. `CreateReservation` coordinates the domain through typed contracts for reservations, room availability, authenticated identity, time, and ID generation. It associates each reservation with the supplied identity and rejects unavailable rooms, starts in the past or more than 90 days ahead, and conflicts with active reservations.
 
-The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. It also detects overlapping periods in the same room while allowing adjacent reservations.
+The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. Reservations start active and can be cancelled through the entity, preserving their data. A second cancellation is rejected. Only active reservations block overlapping periods in the same room; adjacent reservations are allowed.
 
-Authentication, organization ownership, reservation lifecycle, persistence, and HTTP endpoints are planned for later stages. The domain model alone does not prevent concurrent bookings.
+Real authentication, authorization, the cancellation application use case, rescheduling, database persistence, and HTTP endpoints are still pending. Current tests provide the authenticated identity and room availability through in-memory implementations. The separate conflict check and save do not yet prevent concurrent bookings; that guarantee will require atomic persistence.
 
 ## Documentation
 
@@ -94,4 +94,4 @@ npm test
 npm run build
 ```
 
-The tests exercise the reservation's public behavior, including rejected inputs, duration boundaries, date immutability, and overlaps. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.
+The tests exercise the reservation's public behavior and the creation use case, including ownership, availability, booking boundaries, cancellation, and conflicts. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.

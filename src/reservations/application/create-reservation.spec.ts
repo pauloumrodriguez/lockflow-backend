@@ -3,17 +3,22 @@ import { test } from "node:test";
 
 import { Reservation, ReservationStatus } from "../domain/reservation";
 import {
-  AuthenticatedUser,
-  AuthenticationContext,
-  Clock,
+  type AuthenticatedUser,
+  type AuthenticationContext,
+  type Clock,
   CreateReservation,
   CreateReservationError,
   CreateReservationErrorCode,
-  IdGenerator,
-  ReservationRepository,
-  RoomAvailability,
+  type IdGenerator,
+  type ReservationRepository,
+  type RoomAvailability,
 } from "./create-reservation";
 
+/*
+ * Here, in-memory collaborators make room and reservation data predictable.
+ * The repository delegates conflicts to the real entity so these tests exercise
+ * the same overlap and cancellation rules used by the application.
+ */
 class InMemoryReservationRepository implements ReservationRepository {
   readonly reservations: Reservation[] = [];
 
@@ -36,21 +41,16 @@ class InMemoryRoomAvailability implements RoomAvailability {
   }
 }
 
-const AUTHENTICATED_USER: AuthenticatedUser = {
-  userId: "user-ana",
-  organizationId: "organization-a",
-};
-
+/*
+ * Fixed identity, time, and IDs let each scenario describe a repeatable outcome.
+ * They stand in for external services without implementing login or persistence.
+ */
 class FixedAuthenticationContext implements AuthenticationContext {
   constructor(private readonly authenticatedUser: AuthenticatedUser) {}
 
   getAuthenticatedUser(): AuthenticatedUser {
     return { ...this.authenticatedUser };
   }
-}
-
-function createAuthenticationContext(): AuthenticationContext {
-  return new FixedAuthenticationContext(AUTHENTICATED_USER);
 }
 
 class FixedClock implements Clock {
@@ -69,15 +69,47 @@ class FixedIdGenerator implements IdGenerator {
   }
 }
 
-test("creates and saves a reservation for the authenticated user and organization", async () => {
-  const repository = new InMemoryReservationRepository();
+interface TestContextOptions {
+  readonly currentTime?: string;
+  readonly reservationId?: string;
+  readonly reservableRoomIds?: readonly string[];
+  readonly authenticatedUser?: AuthenticatedUser;
+}
 
+/*
+ * Each scenario starts with fresh collaborators and changes only relevant data.
+ * Centralizing this setup keeps dependency wiring out of the story being tested.
+ */
+function createTestContext(options: TestContextOptions = {}) {
+  const repository = new InMemoryReservationRepository();
   const createReservation = new CreateReservation({
     repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T09:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-1"),
+    roomAvailability: new InMemoryRoomAvailability(
+      new Set(options.reservableRoomIds ?? ["room-a"]),
+    ),
+    authenticationContext: new FixedAuthenticationContext(
+      options.authenticatedUser ?? {
+        userId: "user-ana",
+        organizationId: "organization-a",
+      },
+    ),
+    clock: new FixedClock(
+      new Date(options.currentTime ?? "2030-05-01T10:00:00Z"),
+    ),
+    idGenerator: new FixedIdGenerator(options.reservationId ?? "reservation-1"),
+  });
+
+  return { repository, createReservation };
+}
+
+/*
+ * These scenarios follow a request through validation, ownership, and saving.
+ * Successful requests preserve the expected data; rejected requests leave the
+ * repository unchanged. No HTTP server or database is needed at this stage.
+ */
+test("creates and saves a reservation for the authenticated user and organization", async () => {
+  const { repository, createReservation } = createTestContext({
+    currentTime: "2030-05-01T09:00:00Z",
   });
 
   const result = await createReservation.execute({
@@ -101,14 +133,9 @@ test("creates and saves a reservation for the authenticated user and organizatio
 });
 
 test("rejects a reservation that starts in the past", async () => {
-  const repository = new InMemoryReservationRepository();
-
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-10T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-2"),
+  const { repository, createReservation } = createTestContext({
+    currentTime: "2030-05-10T10:00:00Z",
+    reservationId: "reservation-2",
   });
 
   await assert.rejects(
@@ -128,14 +155,8 @@ test("rejects a reservation that starts in the past", async () => {
 });
 
 test("rejects a reservation more than 90 days in advance", async () => {
-  const repository = new InMemoryReservationRepository();
-
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-3"),
+  const { repository, createReservation } = createTestContext({
+    reservationId: "reservation-3",
   });
 
   await assert.rejects(
@@ -155,14 +176,8 @@ test("rejects a reservation more than 90 days in advance", async () => {
 });
 
 test("accepts a reservation exactly 90 days in advance", async () => {
-  const repository = new InMemoryReservationRepository();
-
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-4"),
+  const { repository, createReservation } = createTestContext({
+    reservationId: "reservation-4",
   });
 
   const result = await createReservation.execute({
@@ -176,7 +191,9 @@ test("accepts a reservation exactly 90 days in advance", async () => {
 });
 
 test("rejects an overlapping reservation in the same room", async () => {
-  const repository = new InMemoryReservationRepository();
+  const { repository, createReservation } = createTestContext({
+    reservationId: "reservation-5",
+  });
 
   const existingReservation = Reservation.create({
     id: "existing-reservation",
@@ -188,14 +205,6 @@ test("rejects an overlapping reservation in the same room", async () => {
   });
 
   await repository.save(existingReservation);
-
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-5"),
-  });
 
   await assert.rejects(
     () =>
@@ -214,7 +223,9 @@ test("rejects an overlapping reservation in the same room", async () => {
 });
 
 test("allows an adjacent reservation in the same room", async () => {
-  const repository = new InMemoryReservationRepository();
+  const { repository, createReservation } = createTestContext({
+    reservationId: "reservation-6",
+  });
 
   const existingReservation = Reservation.create({
     id: "existing-reservation",
@@ -227,14 +238,6 @@ test("allows an adjacent reservation in the same room", async () => {
 
   await repository.save(existingReservation);
 
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set(["room-a"])),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-6"),
-  });
-
   const result = await createReservation.execute({
     roomId: "room-a",
     startAt: "2030-05-10T11:00:00Z",
@@ -246,14 +249,9 @@ test("allows an adjacent reservation in the same room", async () => {
 });
 
 test("rejects a reservation when the room is unavailable", async () => {
-  const repository = new InMemoryReservationRepository();
-
-  const createReservation = new CreateReservation({
-    repository,
-    roomAvailability: new InMemoryRoomAvailability(new Set()),
-    authenticationContext: createAuthenticationContext(),
-    clock: new FixedClock(new Date("2030-05-01T10:00:00Z")),
-    idGenerator: new FixedIdGenerator("reservation-7"),
+  const { repository, createReservation } = createTestContext({
+    reservableRoomIds: [],
+    reservationId: "reservation-7",
   });
 
   await assert.rejects(
@@ -270,4 +268,104 @@ test("rejects a reservation when the room is unavailable", async () => {
   );
 
   assert.equal(repository.reservations.length, 0);
+});
+
+test("uses authenticated ownership even when extra owner fields are supplied", async () => {
+  const { repository, createReservation } = createTestContext({
+    authenticatedUser: {
+      userId: "user-bruno",
+      organizationId: "organization-b",
+    },
+  });
+
+  // Extra runtime fields must not override the trusted identity.
+  const request = {
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+    organizationId: "organization-spoofed",
+    createdByUserId: "user-spoofed",
+  };
+
+  const result = await createReservation.execute(request);
+
+  assert.equal(result.organizationId, "organization-b");
+  assert.equal(result.createdByUserId, "user-bruno");
+  assert.equal(repository.reservations.length, 1);
+  assert.deepEqual(repository.reservations[0]?.toJSON(), result);
+});
+
+test("accepts a reservation starting at the current time", async () => {
+  const { repository, createReservation } = createTestContext({
+    currentTime: "2030-05-10T10:00:00Z",
+  });
+
+  const result = await createReservation.execute({
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  assert.equal(result.startAt, "2030-05-10T10:00:00.000Z");
+  assert.equal(repository.reservations.length, 1);
+});
+
+test("rejects a conflict with another organization without exposing its owner", async () => {
+  const { repository, createReservation } = createTestContext();
+  const existingReservation = Reservation.create({
+    id: "another-organization-reservation",
+    roomId: "room-a",
+    organizationId: "organization-b",
+    createdByUserId: "user-bruno",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  await repository.save(existingReservation);
+  const previousSnapshot = existingReservation.toJSON();
+
+  await assert.rejects(
+    () =>
+      createReservation.execute({
+        roomId: "room-a",
+        startAt: "2030-05-10T10:30:00Z",
+        endAt: "2030-05-10T11:30:00Z",
+      }),
+    {
+      constructor: CreateReservationError,
+      code: CreateReservationErrorCode.Overlap,
+      message: "The requested reservation time is unavailable.",
+    },
+  );
+
+  assert.deepEqual(
+    repository.reservations.map((reservation) => reservation.toJSON()),
+    [previousSnapshot],
+  );
+});
+
+test("creates a reservation in the time interval of a cancelled reservation", async () => {
+  const { repository, createReservation } = createTestContext();
+  const existingReservation = Reservation.create({
+    id: "cancelled-reservation",
+    roomId: "room-a",
+    organizationId: "organization-a",
+    createdByUserId: "user-ana",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+  existingReservation.cancel();
+  await repository.save(existingReservation);
+  const cancelledSnapshot = existingReservation.toJSON();
+
+  const result = await createReservation.execute({
+    roomId: "room-a",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+  });
+
+  assert.equal(result.status, ReservationStatus.Active);
+  assert.deepEqual(
+    repository.reservations.map((reservation) => reservation.toJSON()),
+    [cancelledSnapshot, result],
+  );
 });

@@ -1,13 +1,22 @@
-import { Reservation, ReservationSnapshot } from "../domain/reservation";
+import { Reservation, type ReservationSnapshot } from "../domain/reservation";
 
 const MAX_RESERVATION_ADVANCE_MS = 90 * 24 * 60 * 60 * 1000;
 
+/*
+ * Here, the request describes the room and time the caller wants to reserve.
+ * Ownership comes from the authenticated identity supplied by the application.
+ */
 export interface CreateReservationRequest {
   readonly roomId: string;
   readonly startAt: string;
   readonly endAt: string;
 }
 
+/*
+ * These contracts describe the collaborators needed to create a reservation.
+ * Tests supply controlled implementations; infrastructure will later connect
+ * them to persistence, authentication, room records, and the system clock.
+ */
 export interface ReservationRepository {
   hasOverlap(reservation: Reservation): Promise<boolean>;
   save(reservation: Reservation): Promise<void>;
@@ -26,14 +35,6 @@ export interface AuthenticationContext {
   getAuthenticatedUser(): AuthenticatedUser;
 }
 
-export interface CreateReservationDependencies {
-  readonly repository: ReservationRepository;
-  readonly roomAvailability: RoomAvailability;
-  readonly authenticationContext: AuthenticationContext;
-  readonly clock: Clock;
-  readonly idGenerator: IdGenerator;
-}
-
 export interface Clock {
   now(): Date;
 }
@@ -42,6 +43,15 @@ export interface IdGenerator {
   generate(): string;
 }
 
+export interface CreateReservationDependencies {
+  readonly repository: ReservationRepository;
+  readonly roomAvailability: RoomAvailability;
+  readonly authenticationContext: AuthenticationContext;
+  readonly clock: Clock;
+  readonly idGenerator: IdGenerator;
+}
+
+// Stable codes identify failed rules independently of their messages.
 export const CreateReservationErrorCode = {
   StartInPast: "START_IN_PAST",
   StartTooFarInAdvance: "START_TOO_FAR_IN_ADVANCE",
@@ -62,6 +72,11 @@ export class CreateReservationError extends Error {
   }
 }
 
+/*
+ * Here, a request becomes a reservation owned by the authenticated user.
+ * The entity validates its own data, then this use case checks the room,
+ * booking window, and existing reservations before saving the result.
+ */
 export class CreateReservation {
   constructor(private readonly dependencies: CreateReservationDependencies) {}
 
@@ -79,8 +94,19 @@ export class CreateReservation {
       endAt: request.endAt,
     });
 
+    await this.ensureRoomIsReservable(reservation.roomId);
+    this.ensureStartIsWithinBookingWindow(reservation.startAt);
+    await this.ensureNoOverlap(reservation);
+
+    // Persistence must also enforce conflicts atomically under concurrency.
+    await this.dependencies.repository.save(reservation);
+
+    return reservation.toJSON();
+  }
+
+  private async ensureRoomIsReservable(roomId: string): Promise<void> {
     const isRoomReservable =
-      await this.dependencies.roomAvailability.isReservable(request.roomId);
+      await this.dependencies.roomAvailability.isReservable(roomId);
 
     if (!isRoomReservable) {
       throw new CreateReservationError(
@@ -88,9 +114,12 @@ export class CreateReservation {
         "The requested room is unavailable.",
       );
     }
+  }
 
+  private ensureStartIsWithinBookingWindow(startAt: Date): void {
+    // One clock reading keeps both boundaries relative to the same instant.
     const currentTimeMs = this.dependencies.clock.now().getTime();
-    const reservationStartMs = reservation.startAt.getTime();
+    const reservationStartMs = startAt.getTime();
 
     if (reservationStartMs < currentTimeMs) {
       throw new CreateReservationError(
@@ -107,7 +136,9 @@ export class CreateReservation {
         "A reservation cannot start more than 90 days in advance.",
       );
     }
+  }
 
+  private async ensureNoOverlap(reservation: Reservation): Promise<void> {
     const hasOverlap =
       await this.dependencies.repository.hasOverlap(reservation);
 
@@ -117,9 +148,5 @@ export class CreateReservation {
         "The requested reservation time is unavailable.",
       );
     }
-
-    await this.dependencies.repository.save(reservation);
-
-    return reservation.toJSON();
   }
 }

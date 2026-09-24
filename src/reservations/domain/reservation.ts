@@ -63,24 +63,25 @@ const ISO_UTC_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,3}))?Z$/;
 
 /*
- * Here, a reservation brings together its identity, room, and validated period.
- * The period handles time rules, while the reservation decides whether two
- * bookings compete for the same room.
+ * Here, a reservation brings together its owner, room, and validated period.
+ * The period handles time rules, while the entity controls cancellation and
+ * decides whether active bookings compete for the same room.
  */
 export class Reservation {
-  readonly #period: ReservationPeriod;
-  #status: ReservationStatus;
+  readonly id: string;
+  readonly roomId: string;
+  readonly organizationId: string;
+  readonly createdByUserId: string;
 
-  private constructor(
-    readonly id: string,
-    readonly roomId: string,
-    readonly organizationId: string,
-    readonly createdByUserId: string,
-    period: ReservationPeriod,
-    status: ReservationStatus,
-  ) {
+  readonly #period: ReservationPeriod;
+  #status: ReservationStatus = ReservationStatus.Active;
+
+  private constructor(input: CreateReservationInput, period: ReservationPeriod) {
+    this.id = input.id;
+    this.roomId = input.roomId;
+    this.organizationId = input.organizationId;
+    this.createdByUserId = input.createdByUserId;
     this.#period = period;
-    this.#status = status;
   }
 
   static create(input: CreateReservationInput): Reservation {
@@ -91,14 +92,7 @@ export class Reservation {
       endAt: input.endAt,
     });
 
-    return new Reservation(
-      input.id,
-      input.roomId,
-      input.organizationId,
-      input.createdByUserId,
-      period,
-      ReservationStatus.Active,
-    );
+    return new Reservation(input, period);
   }
 
   get startAt(): Date {
