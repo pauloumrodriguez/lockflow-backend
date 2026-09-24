@@ -12,6 +12,11 @@ export interface ReservationSnapshot {
   readonly endAt: string;
 }
 
+interface CreateReservationPeriodInput {
+  readonly startAt: string;
+  readonly endAt: string;
+}
+
 // Named codes let callers identify a failed rule without comparing messages.
 export const ReservationErrorCode = {
   InvalidRoomId: "INVALID_ROOM_ID",
@@ -35,13 +40,105 @@ export class InvalidReservationError extends Error {
   }
 }
 
+const ROOM_ID_PATTERN = /^[a-z0-9-]{1,40}$/;
 const MIN_RESERVATION_DURATION_MS = 15 * 60 * 1000;
 const MAX_RESERVATION_DURATION_MS = 8 * 60 * 60 * 1000;
-const ROOM_ID_PATTERN = /^[a-z0-9-]{1,40}$/;
 
 // Explicit UTC prevents interpretation in the server's local timezone.
 const ISO_UTC_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,3}))?Z$/;
+
+/*
+ * Here, a reservation brings together its identity, room, and validated period.
+ * The period handles time rules, while the reservation decides whether two
+ * bookings compete for the same room.
+ */
+export class Reservation {
+  readonly #period: ReservationPeriod;
+
+  private constructor(
+    readonly id: string,
+    readonly roomId: string,
+    period: ReservationPeriod,
+  ) {
+    this.#period = period;
+  }
+
+  static create(input: CreateReservationInput): Reservation {
+    validateRoomId(input.roomId);
+
+    const period = ReservationPeriod.create({
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
+
+    return new Reservation(input.id, input.roomId, period);
+  }
+
+  get startAt(): Date {
+    return this.#period.startAt;
+  }
+
+  get endAt(): Date {
+    return this.#period.endAt;
+  }
+
+  overlaps(other: Reservation): boolean {
+    const sameRoom = this.roomId === other.roomId;
+
+    return sameRoom && this.#period.overlaps(other.#period);
+  }
+
+  toJSON(): ReservationSnapshot {
+    return {
+      id: this.id,
+      roomId: this.roomId,
+      startAt: this.startAt.toISOString(),
+      endAt: this.endAt.toISOString(),
+    };
+  }
+}
+
+/*
+ * Here, the two timestamps become one validated reservation period.
+ * This value object owns the calendar, ordering, and duration rules.
+ * Private timestamps keep the period unchanged when callers modify date copies.
+ */
+class ReservationPeriod {
+  readonly #startMs: number;
+  readonly #endMs: number;
+
+  private constructor(startMs: number, endMs: number) {
+    this.#startMs = startMs;
+    this.#endMs = endMs;
+  }
+
+  static create(input: CreateReservationPeriodInput): ReservationPeriod {
+    const startMs = parseUtcDate(input.startAt);
+    const endMs = parseUtcDate(input.endAt);
+
+    validateTimeOrder(startMs, endMs);
+    validateDuration(startMs, endMs);
+
+    return new ReservationPeriod(startMs, endMs);
+  }
+
+  get startAt(): Date {
+    return new Date(this.#startMs);
+  }
+
+  get endAt(): Date {
+    return new Date(this.#endMs);
+  }
+
+  // Strict comparisons allow one period to start exactly when another ends.
+  overlaps(other: ReservationPeriod): boolean {
+    const startsBeforeOtherEnds = this.#startMs < other.#endMs;
+    const endsAfterOtherStarts = this.#endMs > other.#startMs;
+
+    return startsBeforeOtherEnds && endsAfterOtherStarts;
+  }
+}
 
 function validateRoomId(roomId: string): void {
   if (!ROOM_ID_PATTERN.test(roomId)) {
@@ -110,66 +207,5 @@ function validateDuration(startMs: number, endMs: number): void {
       ReservationErrorCode.DurationTooLong,
       "A reservation cannot last longer than 8 hours.",
     );
-  }
-}
-
-/*
- * A reservation checks its room and time interval before it can be created.
- * Private timestamps preserve that validated interval, while callers receive
- * date copies or a snapshot for reading.
- */
-export class Reservation {
-  readonly #startMs: number;
-  readonly #endMs: number;
-
-  private constructor(
-    readonly id: string,
-    readonly roomId: string,
-    startMs: number,
-    endMs: number,
-  ) {
-    this.#startMs = startMs;
-    this.#endMs = endMs;
-  }
-
-  static create(input: CreateReservationInput): Reservation {
-    validateRoomId(input.roomId);
-
-    const startMs = parseUtcDate(input.startAt);
-    const endMs = parseUtcDate(input.endAt);
-
-    validateTimeOrder(startMs, endMs);
-    validateDuration(startMs, endMs);
-
-    return new Reservation(input.id, input.roomId, startMs, endMs);
-  }
-
-  get startAt(): Date {
-    return new Date(this.#startMs);
-  }
-
-  get endAt(): Date {
-    return new Date(this.#endMs);
-  }
-
-  /*
-   * Reservations overlap only when they compete for the same room and their
-   * half-open intervals share time. Touching boundaries remain available.
-   */
-  overlaps(other: Reservation): boolean {
-    return (
-      this.roomId === other.roomId &&
-      this.#startMs < other.#endMs &&
-      other.#startMs < this.#endMs
-    );
-  }
-
-  toJSON(): ReservationSnapshot {
-    return {
-      id: this.id,
-      roomId: this.roomId,
-      startAt: this.startAt.toISOString(),
-      endAt: this.endAt.toISOString(),
-    };
   }
 }

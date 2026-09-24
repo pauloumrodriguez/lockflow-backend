@@ -42,9 +42,13 @@ The following technologies will be introduced gradually throughout the developme
 
 ## Current Status
 
-The project is currently in the specification stage.
+Stage 2 is complete: the NestJS application starts, and the reservation domain model is implemented and tested.
 
-Before implementing the API, the system's business rules and acceptance scenarios will be defined and documented.
+Stage 3 has not started. The next step is the application layer, beginning with tests for a `CreateReservation` use case, an explicit current-time dependency, and repository contracts supported by in-memory test doubles.
+
+The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. It also detects overlapping periods in the same room while allowing adjacent reservations.
+
+Authentication, organization ownership, reservation lifecycle, persistence, and HTTP endpoints are planned for later stages. The domain model alone does not prevent concurrent bookings.
 
 ## Documentation
 
@@ -66,6 +70,28 @@ The project documentation is located in the `docs` directory:
 - organization management;
 - room management.
 
-## Note
+## Local Development
 
-The API has not been implemented yet. At this stage, the expected system behavior will be specified before technical implementation details are introduced.
+Use Node.js 24 and npm. Install the versions recorded in the lockfile:
+
+```sh
+npm ci
+```
+
+Start the NestJS application:
+
+```sh
+npm run start:dev
+```
+
+The server listens on port 3000 by default, or on the port supplied through `PORT`. The root URL returns 404 because no HTTP controllers have been added yet.
+
+## Verification
+
+```sh
+npm run typecheck
+npm test
+npm run build
+```
+
+The tests exercise the reservation's public behavior, including rejected inputs, duration boundaries, date immutability, and overlaps. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.

@@ -2,6 +2,8 @@
 
 This document describes observable examples of how LockFlow must behave.
 
+These are product acceptance scenarios, not a list of implemented API features. Stage 2 has automated domain tests for date, duration, room identifier, and overlap rules. Those tests cover the underlying domain behavior of some scenarios, but they do not exercise authentication, persistence, or complete request flows. See [current status and future work](../README.md#current-status).
+
 The scenarios use the Given–When–Then format:
 
 - **Given** describes the initial context;

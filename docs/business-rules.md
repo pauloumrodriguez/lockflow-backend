@@ -2,6 +2,8 @@
 
 This document defines the expected behavior of the LockFlow reservation system independently of implementation details.
 
+These rules describe the intended product, including features planned for later stages. Stage 2 implements the reservation domain checks described in the [README](../README.md#current-status); it does not implement every rule below.
+
 ## 1. Core Concepts
 
 ### Organization
@@ -10,7 +12,7 @@ An organization represents a company that uses the platform. Each organization h
 
 ### User
 
-A user belongs to one organization and has a role that determines which actions they can perform.
+Members and organization administrators belong to one organization. Platform administrators use a platform-level account. Each user's role determines which actions they can perform.
 
 ### Room
 
@@ -87,6 +89,8 @@ The reservation start time must be earlier than its end time. A reservation whos
 
 Reservation times must be represented in UTC using the ISO 8601 format, such as `2030-05-10T10:00:00Z`.
 
+Accepted timestamps include seconds and end with `Z`. Fractional seconds are optional and may contain one to three digits. Dates must exist in the calendar. Serialized timestamps use three fractional digits, such as `2030-05-10T10:00:00.000Z`.
+
 Clients may display local time, but they must convert it to UTC before sending it to the backend.
 
 ### BR-03 — Only active rooms can be reserved
@@ -133,7 +137,7 @@ A platform administrator account is intended for platform management. Regular re
 
 ### BR-11 — Organizations can access only their own private data
 
-Users can access only the users and reservations belonging to their organization.
+Members and organization administrators can access only the users and reservations belonging to their organization, subject to their role permissions. Platform administrators have the cross-organization access explicitly listed under their role.
 
 ### BR-12 — Reservation conflicts must not expose private data
 

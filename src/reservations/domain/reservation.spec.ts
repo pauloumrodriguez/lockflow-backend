@@ -212,13 +212,10 @@ for (const field of ["startAt", "endAt"] as const) {
       [field]: "2030-02-30T10:00:00Z",
     };
 
-    assert.throws(
-      () => Reservation.create(input),
-      {
-        constructor: InvalidReservationError,
-        code: ReservationErrorCode.InvalidCalendarDate,
-      },
-    );
+    assert.throws(() => Reservation.create(input), {
+      constructor: InvalidReservationError,
+      code: ReservationErrorCode.InvalidCalendarDate,
+    });
   });
 }
 
@@ -340,3 +337,42 @@ test("detects a reservation contained within another reservation", () => {
   assert.equal(outer.overlaps(inner), true);
   assert.equal(inner.overlaps(outer), true);
 });
+
+for (const { description, startAt, endAt, expected } of [
+  {
+    description: "detects equal intervals in the same room",
+    startAt: "2030-05-10T10:00:00Z",
+    endAt: "2030-05-10T11:00:00Z",
+    expected: true,
+  },
+  {
+    description: "allows intervals separated by a gap in the same room",
+    startAt: "2030-05-10T12:00:00Z",
+    endAt: "2030-05-10T13:00:00Z",
+    expected: false,
+  },
+  {
+    description: "detects an overlap of one millisecond",
+    startAt: "2030-05-10T10:59:59.999Z",
+    endAt: "2030-05-10T12:00:00Z",
+    expected: true,
+  },
+]) {
+  test(description, () => {
+    const first = Reservation.create({
+      id: "reservation-boundary-first",
+      roomId: "room-a",
+      startAt: "2030-05-10T10:00:00Z",
+      endAt: "2030-05-10T11:00:00Z",
+    });
+    const second = Reservation.create({
+      id: "reservation-boundary-second",
+      roomId: "room-a",
+      startAt,
+      endAt,
+    });
+
+    assert.equal(first.overlaps(second), expected);
+    assert.equal(second.overlaps(first), expected);
+  });
+}
