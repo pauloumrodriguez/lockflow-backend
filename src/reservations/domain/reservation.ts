@@ -17,7 +17,7 @@ export interface ReservationSnapshot {
   readonly endAt: string;
 }
 
-interface CreateReservationPeriodInput {
+export interface CreateReservationPeriodInput {
   readonly startAt: string;
   readonly endAt: string;
 }
@@ -64,7 +64,7 @@ const ISO_UTC_PATTERN =
 
 /*
  * Here, a reservation brings together its owner, room, and validated period.
- * The period handles time rules, while the entity controls cancellation and
+ * The period handles time rules, while the entity controls cancellation, rescheduling, and
  * decides whether active bookings compete for the same room.
  */
 export class Reservation {
@@ -116,6 +116,28 @@ export class Reservation {
     }
 
     this.#status = ReservationStatus.Cancelled;
+  }
+
+  /*
+   * A proposed period produces a replacement with the same identity and owner.
+   * The original stays unchanged if validation, availability, or saving fails.
+   */
+  reschedule(input: CreateReservationPeriodInput): Reservation {
+    if (!this.isActive()) {
+      throw new InvalidReservationError(
+        ReservationErrorCode.AlreadyCancelled,
+        "A cancelled reservation cannot be rescheduled.",
+      );
+    }
+
+    return Reservation.create({
+      id: this.id,
+      roomId: this.roomId,
+      organizationId: this.organizationId,
+      createdByUserId: this.createdByUserId,
+      startAt: input.startAt,
+      endAt: input.endAt,
+    });
   }
 
   overlaps(other: Reservation): boolean {

@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import {
   type AuthenticatedUser,
-  type AuthenticationContext,
   UserRole,
 } from "../../authentication/application/authentication-context";
 import {
@@ -14,58 +13,14 @@ import {
 } from "../domain/reservation";
 import {
   CancelReservation,
-  CancelReservationError,
-  CancelReservationErrorCode,
 } from "./cancel-reservation";
+import { ReservationApplicationError, ReservationApplicationErrorCode } from "./reservation-application-error";
 import type { ReservationRepository } from "./reservation-repository";
 
-/*
- * Here, the in-memory repository behaves like persistence while keeping each
- * scenario isolated. Saving replaces an existing entity with the same ID,
- * which makes cancellation an update rather than a second reservation.
- */
-class InMemoryReservationRepository implements ReservationRepository {
-  readonly reservations: Reservation[];
-  saveCalls = 0;
-
-  constructor(initialReservations: readonly Reservation[] = []) {
-    this.reservations = [...initialReservations];
-  }
-
-  async findById(id: string): Promise<Reservation | null> {
-    return (
-      this.reservations.find((reservation) => reservation.id === id) ?? null
-    );
-  }
-
-  async hasOverlap(reservation: Reservation): Promise<boolean> {
-    return this.reservations.some((savedReservation) =>
-      savedReservation.overlaps(reservation),
-    );
-  }
-
-  async save(reservation: Reservation): Promise<void> {
-    this.saveCalls += 1;
-    const savedIndex = this.reservations.findIndex(
-      (savedReservation) => savedReservation.id === reservation.id,
-    );
-
-    if (savedIndex === -1) {
-      this.reservations.push(reservation);
-      return;
-    }
-
-    this.reservations[savedIndex] = reservation;
-  }
-}
-
-class FixedAuthenticationContext implements AuthenticationContext {
-  constructor(private readonly authenticatedUser: AuthenticatedUser) {}
-
-  getAuthenticatedUser(): AuthenticatedUser {
-    return { ...this.authenticatedUser };
-  }
-}
+import {
+  InMemoryReservationRepository,
+  FixedAuthenticationContext,
+} from "./reservation.test-support";
 
 interface TestReservationOptions {
   readonly id?: string;
@@ -139,8 +94,8 @@ test("rejects cancellation when the reservation does not exist", async () => {
         reservationId: "missing-reservation",
       }),
     {
-      constructor: CancelReservationError,
-      code: CancelReservationErrorCode.NotFound,
+      constructor: ReservationApplicationError,
+      code: ReservationApplicationErrorCode.NotFound,
     },
   );
 
@@ -179,8 +134,8 @@ test("rejects a member cancelling another member's reservation", async () => {
         reservationId: reservation.id,
       }),
     {
-      constructor: CancelReservationError,
-      code: CancelReservationErrorCode.NotAllowed,
+      constructor: ReservationApplicationError,
+      code: ReservationApplicationErrorCode.NotAllowed,
     },
   );
 
@@ -219,8 +174,8 @@ test("hides another organization's reservation from a member", async () => {
         reservationId: reservation.id,
       }),
     {
-      constructor: CancelReservationError,
-      code: CancelReservationErrorCode.NotFound,
+      constructor: ReservationApplicationError,
+      code: ReservationApplicationErrorCode.NotFound,
       message: "The requested reservation was not found.",
     },
   );
@@ -247,8 +202,8 @@ test("hides another organization's reservation from an organization administrato
         reservationId: reservation.id,
       }),
     {
-      constructor: CancelReservationError,
-      code: CancelReservationErrorCode.NotFound,
+      constructor: ReservationApplicationError,
+      code: ReservationApplicationErrorCode.NotFound,
       message: "The requested reservation was not found.",
     },
   );
