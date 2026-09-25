@@ -2,7 +2,20 @@
 
 This document describes observable examples of how LockFlow must behave.
 
-These are product acceptance scenarios, not a list of implemented API features. Stage 2 has automated domain tests for date, duration, room identifier, and overlap rules. Those tests cover the underlying domain behavior of some scenarios, but they do not exercise authentication, persistence, or complete request flows. See [current status and future work](../README.md#current-status).
+These are product acceptance scenarios, not a list of implemented API features. Stage 3 is complete at the domain and application level, using trusted identity fixtures and in-memory collaborators. There are no reservation HTTP endpoints, real sign-in flows, or database integration tests yet. See [current status and future work](../README.md#current-status).
+
+## Coverage at the End of Stage 3
+
+| Scenarios | Current coverage |
+| --- | --- |
+| AS-05–15, AS-18–20, AS-30–32, AS-34–40, AS-47 | Domain/application behavior is tested. Room status and authenticated identity are supplied by test collaborators. |
+| AS-01–04 | Pending credential authentication and inactive-account enforcement. |
+| AS-16–17, AS-21–29, AS-41–45 | Pending user, organization, and room administration. The affected-reservations query is available, but deactivation workflows are not implemented. |
+| AS-33 | Pending atomic PostgreSQL persistence and concurrent integration tests. A sequential availability-then-booking test does not prove concurrency safety. |
+| AS-46 | Reactivation remains excluded from the first version. |
+| AS-48–55 | Additional application and domain boundary scenarios implemented in Stage 3. |
+
+All current automated tests run without a database or HTTP server. These results demonstrate the business behavior under the supplied contracts; production adapters must satisfy those contracts.
 
 The scenarios use the Given–When–Then format:
 
@@ -340,3 +353,73 @@ The scenarios use the Given–When–Then format:
 **Given** Ana is creating a reservation  
 **When** she provides a room identifier containing spaces or uppercase letters  
 **Then** the system rejects the reservation as invalid.
+
+## 8. Stage 3 Boundary Scenarios
+
+### AS-48 — Reject rescheduling a cancelled reservation
+
+**Given** Ana's reservation is cancelled\
+**When** she tries to reschedule it\
+**Then** the operation is rejected\
+**And** the cancelled record remains unchanged.
+
+### AS-49 — Preserve identity and ownership when rescheduling
+
+**Given** Ana owns an active reservation in Room A for Company A\
+**When** she requests a different valid period\
+**Then** only the period changes\
+**And** the reservation ID, room, organization, creator, and active status are preserved\
+**And** extra room or ownership fields cannot override the existing values.
+
+### AS-50 — Exclude the original period from the rescheduling conflict check
+
+**Given** Ana owns Room A's only booking from 10:00 to 11:00\
+**When** she moves it to 10:30–11:30\
+**Then** the operation succeeds\
+**And** its previous period is not treated as a competing reservation.
+
+### AS-51 — A failed save preserves the original reservation
+
+**Given** Ana owns an active reservation\
+**When** a cancellation or rescheduling reaches persistence\
+**And** saving fails\
+**Then** the failure is propagated\
+**And** the original entity remains unchanged\
+**And** no successful result is returned.
+
+### AS-52 — Return whole free intervals that fit the requested duration
+
+**Given** Room A is occupied from 10:00 to 11:00\
+**When** Ana searches from 09:00 to 13:00 for a 30-minute reservation\
+**Then** the system returns 09:00–10:00 and 11:00–13:00\
+**And** returns neither reservation IDs nor ownership details\
+**And** excludes cancelled reservations from occupied time.
+
+### AS-53 — Inspect future reservations affected by an administrative action
+
+**Given** Patricia is a platform administrator\
+**When** she selects one room or one organization for an administrative query\
+**Then** she receives active reservations matching that resource whose start is at or after the supplied current time\
+**And** past-starting and cancelled reservations are excluded\
+**And** members and organization administrators cannot execute this query.
+
+This query prepares an administrative decision. It does not deactivate the resource or automatically cancel any reservations.
+
+### AS-54 — Accept the inclusive booking-window boundaries
+
+**Given** an authenticated organization user can create or reschedule a reservation\
+**When** its start is exactly the current instant or exactly 90 days later\
+**And** its room and period satisfy all other rules\
+**Then** the operation succeeds\
+**And** a start before now or after the 90-day limit is rejected.
+
+### AS-55 — Reject invalid availability input and return an empty result when no interval fits
+
+**Given** Ana is searching an active room's availability\
+**When** the timestamps are invalid or reversed, or the desired duration is outside 15–480 minutes or non-finite\
+**Then** the request is rejected before querying the schedule.
+
+**Given** the search input is valid\
+**But** no free interval is long enough for the requested duration\
+**When** Ana checks availability\
+**Then** the result is an empty list.

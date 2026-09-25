@@ -2,7 +2,7 @@
 
 This document defines the expected behavior of the LockFlow reservation system independently of implementation details.
 
-These rules describe the intended product, including features planned for later stages. Stage 2 implements the reservation domain checks described in the [README](../README.md#current-status); it does not implement every rule below.
+These rules describe the intended product, including features planned for later stages. Stage 3 completes the reservation domain and application use cases described in the [README](../README.md#current-status). HTTP, credential authentication, account-status enforcement, administration, and atomic database persistence remain future work.
 
 ## 1. Core Concepts
 
@@ -97,6 +97,8 @@ Clients may display local time, but they must convert it to UTC before sending i
 
 A reservation can only be created for a room that exists and is active.
 
+Rescheduling also requires the existing room to remain active.
+
 ### BR-04 — Active reservations cannot overlap
 
 A room cannot have two active reservations with overlapping time intervals. This rule applies across all organizations because rooms are globally shared.
@@ -132,6 +134,8 @@ An organization administrator can reschedule or cancel any reservation belonging
 ### BR-10 — Platform administrators cannot create regular reservations
 
 A platform administrator account is intended for platform management. Regular reservations must be created through an account belonging to an organization.
+
+Regular listing, availability searches, and rescheduling also use organization accounts. Platform administrators use the dedicated affected-reservations query and explicit administrative cancellation.
 
 ## 4. Organization Data Isolation
 
@@ -170,6 +174,10 @@ An already cancelled reservation cannot be rescheduled or cancelled again as an 
 ### BR-17 — Rescheduling must respect conflict rules
 
 The new interval must not overlap another active reservation for the same room. If it is invalid or unavailable, the original reservation must remain unchanged.
+
+Rescheduling preserves the reservation ID, room, organization, and creator. Only the requested start and end change. Conflict checks exclude the reservation being rescheduled, but still consider all other active reservations across organizations.
+
+A failed save must not change the original reservation in memory. Durable updates and protection against simultaneous changes will be enforced by the future persistence implementation.
 
 ## 6. Authentication and Account Status
 
@@ -218,11 +226,17 @@ An availability request must specify:
 - the end of the search window;
 - the desired reservation duration.
 
+The search window uses the same UTC timestamp format as reservations, with the start before the end. The desired duration is a finite number of minutes between 15 and 480. The search window itself can be longer than 8 hours.
+
 ### BR-27 — Availability returns intervals that fit the requested duration
 
 The system returns free intervals that are long enough for the requested duration.
 
 For example, if a room is free from 11:00 to 13:00, this entire interval may be returned for a requested duration of 30 minutes. The system does not need to divide it into individual 30-minute slots.
+
+Results are ordered by start time and clipped to the search window. Cancelled reservations do not count as occupied time. If no free interval fits the desired duration, the result is an empty list.
+
+Availability describes unoccupied time in the requested window. It does not guarantee that a subsequent booking will succeed; creation and rescheduling still enforce the current booking window, room status, and conflicts.
 
 ## 9. Initial Project Scope
 

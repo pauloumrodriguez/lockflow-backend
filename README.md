@@ -42,13 +42,56 @@ The following technologies will be introduced gradually throughout the developme
 
 ## Current Status
 
-Stage 2 is complete: the NestJS application starts, and the reservation domain model is implemented and tested.
+**Stage 3 is complete: reservation domain and application use cases.** The project is at version `0.2.0`.
 
-Stage 3 is in progress. `CreateReservation` coordinates the domain through typed contracts for reservations, room availability, authenticated identity, time, and ID generation. It associates each reservation with an organization user and rejects unavailable rooms, starts in the past or more than 90 days ahead, conflicts with active reservations, and regular creation attempts from platform administrators. `CancelReservation` retrieves the entity through the shared repository contract, enforces role and organization access, delegates the state transition to the entity, and saves the cancelled reservation without deleting its history.
+| Use case | Implemented behavior |
+| --- | --- |
+| `CreateReservation` | Trusted ownership, active room, booking window, duration, and global conflict checks. |
+| `CancelReservation` | Ownership and role permissions, preserved history, and rejection of repeat cancellation. |
+| `RescheduleReservation` | Same identity, room, and owner; validated replacement period; self excluded from conflict checks. |
+| `ListReservations` | Active reservations from the authenticated organization, including colleagues' bookings. |
+| `GetRoomAvailability` | Whole free intervals for an active room, across organizations, with no ownership data. |
+| `ListAffectedReservations` | Platform-only query of future active bookings for a selected room or organization. |
 
-The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. Reservations start active and can be cancelled through the entity, preserving their data. A second cancellation is rejected. Only active reservations block overlapping periods in the same room; adjacent reservations are allowed.
+The domain validates room identifiers, UTC calendar dates, time ordering, and durations from 15 minutes to 8 hours. Creation and rescheduling accept starts from the current instant through exactly 90 days ahead. Active reservations block overlapping periods globally; adjacent periods and cancelled bookings do not conflict.
 
-Credential authentication, account status checks, rescheduling, database persistence, and HTTP endpoints are still pending. Current tests provide authenticated identities, room availability, and persistence through in-memory implementations. The separate conflict check and save do not yet prevent concurrent bookings; that guarantee will require atomic persistence.
+Cancellation and rescheduling return replacement entities. The application saves the replacement only after the applicable checks pass, so a rejected operation or failed save leaves the original entity unchanged.
+
+Tests provide trusted identities, room status, time, IDs, and storage through in-memory collaborators. **This milestone does not provide reservation HTTP endpoints or PostgreSQL persistence.** Credential authentication, inactive-account checks, user/organization/room administration, Docker deployment, and continuous integration remain future work.
+
+The separate conflict check and save are not atomic. Concurrent requests, conflicting updates, and durable history still require database constraints and transactions. The future authentication adapter must validate credentials and active user/organization status before providing an `AuthenticationContext`.
+
+## Development Milestones
+
+- Stage 1: project setup and NestJS bootstrap — complete.
+- Stage 2: reservation domain and its tests — complete.
+- Stage 3: reservation application use cases and their tests — complete.
+- Next: PostgreSQL persistence, migrations, repository/query adapters, and integration tests for transactions and simultaneous booking attempts.
+
+## Code Organization and Design Decisions
+
+The domain owns reservation behavior and time calculations. Application use cases coordinate access and external information through typed interfaces. NestJS and the future database adapter stay outside those business rules.
+
+- `Reservation` is an entity composed with `ReservationPeriod`, a value object kept in the same file.
+- `cancel()` and `reschedule()` perform domain behavior; callers do not assign status or rebuild lifecycle rules. Both return a replacement that must be saved.
+- `ReservationBookingPolicy` shares room, clock, and conflict checks between creation and rescheduling.
+- Access helpers centralize organization and ownership permissions. Hidden and missing reservations have the same response.
+- Repository methods return entities for behavior. Narrow query ports supply only what each read operation needs; availability receives occupied intervals without ownership.
+- Requests and dependencies use named fields in typed interfaces. Roles, statuses, scopes, and error codes use `as const` maps with inferred union types. The `typeof` used in these type declarations does not perform a runtime check.
+- Tests reuse collaborators in `reservation.test-support.ts`; that file is excluded from the production build.
+- Short English comments explain the flow and reasons behind important decisions.
+
+TypeScript checks contracts during compilation. Future HTTP handlers must still validate incoming data at runtime; a TypeScript interface alone cannot validate JSON.
+
+The relevant Refactoring.Guru main articles, TypeScript usage notes, and examples were reviewed with the following decisions:
+
+| Pattern | Decision for this stage | References |
+| --- | --- | --- |
+| Factory Method | Keep the static `Reservation.create()` factory. There is no creator subclass hierarchy, so this is not the GoF Factory Method pattern. | [Article](https://refactoring.guru/design-patterns/factory-method), [TypeScript](https://refactoring.guru/design-patterns/factory-method/typescript/example) |
+| Adapter | Keep ports for external dependencies. PostgreSQL will implement these contracts in the next stage. | [Article](https://refactoring.guru/design-patterns/adapter), [TypeScript](https://refactoring.guru/design-patterns/adapter/typescript/example) |
+| Command | Use focused application use cases with `execute(request)`. Queuing, undo history, and a generic command hierarchy are not required. | [Article](https://refactoring.guru/design-patterns/command), [TypeScript](https://refactoring.guru/design-patterns/command/typescript/example) |
+| Strategy | Keep one booking policy: the product has no interchangeable booking algorithms yet. | [Article](https://refactoring.guru/design-patterns/strategy), [TypeScript](https://refactoring.guru/design-patterns/strategy/typescript/example) |
+| State | Keep the two-state lifecycle inside the entity; separate state classes would add indirection without solving a current problem. | [Article](https://refactoring.guru/design-patterns/state), [TypeScript](https://refactoring.guru/design-patterns/state/typescript/example) |
 
 ## Documentation
 
@@ -57,7 +100,7 @@ The project documentation is located in the `docs` directory:
 - [`business-rules.md`](docs/business-rules.md);
 - [`acceptance-scenarios.md`](docs/acceptance-scenarios.md).
 
-## Planned Features
+## Product Features
 
 - user authentication;
 - room listing;
@@ -94,4 +137,4 @@ npm test
 npm run build
 ```
 
-The tests exercise the reservation's public behavior and its application use cases, including ownership, role authorization, organization isolation, availability, booking boundaries, cancellation, and conflicts. The business rules and acceptance scenarios also describe future features; they are not all implemented by this stage.
+The 116 automated tests exercise domain and application behavior, including ownership, role authorization, organization isolation, availability, booking boundaries, cancellation, rescheduling, conflict handling, and failed-save preservation. They do not exercise a real database, HTTP requests, or login. See the coverage notes in the acceptance scenarios for remaining product work.

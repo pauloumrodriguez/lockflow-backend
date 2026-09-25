@@ -1,6 +1,6 @@
 {
   "name": "lockflow-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A backend API for managing shared room reservations across multiple organizations.",
   "private": true,
   "license": "MIT",
