@@ -25,9 +25,9 @@ for (const role of [UserRole.Member, UserRole.OrganizationAdmin]) {
       organizationId: "organization-b",
     });
     const cancelled = createStoredReservation({ id: "cancelled" });
-    cancelled.cancel();
+    const cancelledBooking = cancelled.cancel();
     const dependencies = createDependencies({
-      reservations: [own, colleague, foreign, cancelled],
+      reservations: [own, colleague, foreign, cancelledBooking],
       authenticatedUser: {
         role,
         organizationId: "organization-a",
@@ -99,7 +99,7 @@ test("returns snapshots that cannot change the stored reservation", async () => 
     reservations: dependencies.repository,
   });
   const result = await useCase.execute();
-  const copy = { ...result[0], startAt: "changed outside the domain" };
-  assert.notEqual(copy.startAt, reservation.toJSON().startAt);
+  Object.assign(result[0]!, { startAt: "changed outside the domain" });
+  assert.equal(reservation.toJSON().startAt, "2030-05-10T10:00:00.000Z");
   assert.notEqual(result[0], reservation);
 });

@@ -406,9 +406,10 @@ test("cancels an active reservation and preserves its history", () => {
     endAt: "2030-05-10T11:00:00Z",
   });
 
-  reservation.cancel();
+  const cancelled = reservation.cancel();
+  assert.equal(reservation.status, ReservationStatus.Active);
 
-  assert.deepEqual(reservation.toJSON(), {
+  assert.deepEqual(cancelled.toJSON(), {
     id: "reservation-to-cancel",
     roomId: "room-a",
     organizationId: "organization-a",
@@ -427,9 +428,9 @@ test("rejects cancelling an already cancelled reservation", () => {
     endAt: "2030-05-10T11:00:00Z",
   });
 
-  reservation.cancel();
+  const cancelled = reservation.cancel();
 
-  assert.throws(() => reservation.cancel(), {
+  assert.throws(() => cancelled.cancel(), {
     constructor: InvalidReservationError,
     code: ReservationErrorCode.AlreadyCancelled,
   });
@@ -451,8 +452,8 @@ test("a cancelled reservation no longer blocks its time interval", () => {
 
   assert.equal(cancelledReservation.overlaps(activeReservation), true);
 
-  cancelledReservation.cancel();
+  const cancelled = cancelledReservation.cancel();
 
-  assert.equal(cancelledReservation.overlaps(activeReservation), false);
-  assert.equal(activeReservation.overlaps(cancelledReservation), false);
+  assert.equal(cancelled.overlaps(activeReservation), false);
+  assert.equal(activeReservation.overlaps(cancelled), false);
 });

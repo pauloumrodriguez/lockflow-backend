@@ -21,7 +21,8 @@ export interface CancelReservationDependencies {
 /*
  * Here, cancellation checks access before asking the entity to change state.
  * Organization users follow ownership rules; platform administrators can perform
- * explicit administrative cancellations. The record remains stored as history.
+ * explicit administrative cancellations. The record remains stored as history,
+ * and a failed save leaves the original entity unchanged.
  */
 export class CancelReservation {
   constructor(private readonly dependencies: CancelReservationDependencies) {}
@@ -40,8 +41,8 @@ export class CancelReservation {
     if (user.role !== UserRole.PlatformAdmin) {
       ensureCanManageReservation(reservation, user);
     }
-    reservation.cancel();
-    await this.dependencies.repository.save(reservation);
-    return reservation.toJSON();
+    const cancelled = reservation.cancel();
+    await this.dependencies.repository.save(cancelled);
+    return cancelled.toJSON();
   }
 }

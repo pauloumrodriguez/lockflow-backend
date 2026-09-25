@@ -278,9 +278,9 @@ test("creates a reservation in the time interval of a cancelled reservation", as
     startAt: "2030-05-10T10:00:00Z",
     endAt: "2030-05-10T11:00:00Z",
   });
-  existingReservation.cancel();
-  await repository.save(existingReservation);
-  const cancelledSnapshot = existingReservation.toJSON();
+  const cancelled = existingReservation.cancel();
+  await repository.save(cancelled);
+  const cancelledSnapshot = cancelled.toJSON();
 
   const result = await createReservation.execute({
     roomId: "room-a",

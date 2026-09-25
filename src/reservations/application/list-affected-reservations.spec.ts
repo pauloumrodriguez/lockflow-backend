@@ -25,7 +25,7 @@ function createContext() {
     roomId: "room-b",
   });
   const cancelled = createStoredReservation({ id: "cancelled" });
-  cancelled.cancel();
+  const cancelledBooking = cancelled.cancel();
   const past = createStoredReservation({
     id: "past",
     startAt: "2030-04-30T10:00:00Z",
@@ -38,7 +38,7 @@ function createContext() {
   });
   const dependencies = createDependencies({
     authenticatedUser: { role: UserRole.PlatformAdmin, userId: "patricia" },
-    reservations: [roomA, foreign, roomB, cancelled, past, atNow],
+    reservations: [roomA, foreign, roomB, cancelledBooking, past, atNow],
   });
   return new ListAffectedReservations({
     ...dependencies,

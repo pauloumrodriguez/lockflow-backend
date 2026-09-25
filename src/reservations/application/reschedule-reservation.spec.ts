@@ -214,12 +214,12 @@ for (const startAt of ["2030-05-01T10:00:00Z", "2030-07-30T10:00:00Z"]) {
 
 test("rejects rescheduling a cancelled reservation", async () => {
   const { original, useCase, repository } = createContext();
-  original.cancel();
+  repository.reservations[0] = original.cancel();
   await assert.rejects(() => useCase.execute(NEW_PERIOD), {
     code: ReservationErrorCode.AlreadyCancelled,
   });
   assert.equal(repository.saveCalls, 0);
-  assert.equal(original.status, ReservationStatus.Cancelled);
+  assert.equal(repository.reservations[0]?.status, ReservationStatus.Cancelled);
 });
 
 test("rejects rescheduling into an unavailable room", async () => {
@@ -278,13 +278,13 @@ test("ignores cancelled bookings and bookings in another room during reschedulin
     id: "cancelled",
     ...{ startAt: NEW_PERIOD.startAt, endAt: NEW_PERIOD.endAt },
   });
-  cancelled.cancel();
+  const cancelledBooking = cancelled.cancel();
   const otherRoom = createStoredReservation({
     id: "other-room",
     roomId: "room-b",
   });
   const { useCase } = createContext({
-    reservations: [original, cancelled, otherRoom],
+    reservations: [original, cancelledBooking, otherRoom],
   });
   assert.equal(
     (await useCase.execute(NEW_PERIOD)).status,

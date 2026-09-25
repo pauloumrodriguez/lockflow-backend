@@ -56,6 +56,25 @@ function createCancelReservation(
   });
 }
 
+test("keeps the original active when saving a cancellation fails", async () => {
+  const reservation = createReservation();
+  const before = reservation.toJSON();
+  const repository = new InMemoryReservationRepository([reservation]);
+  const failure = new Error("Persistence failed.");
+  repository.saveError = failure;
+
+  await assert.rejects(
+    () =>
+      createCancelReservation(repository).execute({
+        reservationId: reservation.id,
+      }),
+    failure,
+  );
+  assert.deepEqual(repository.reservations[0]?.toJSON(), before);
+  assert.equal(reservation.status, ReservationStatus.Active);
+  assert.equal(repository.saveCalls, 0);
+});
+
 /*
  * These scenarios follow cancellation through lookup, domain behavior, and
  * persistence. Failed operations never ask the repository to save a new state.
@@ -103,8 +122,8 @@ test("rejects cancellation when the reservation does not exist", async () => {
 
 test("rejects cancellation when the reservation is already cancelled", async () => {
   const reservation = createReservation();
-  reservation.cancel();
-  const repository = new InMemoryReservationRepository([reservation]);
+  const cancelled = reservation.cancel();
+  const repository = new InMemoryReservationRepository([cancelled]);
   const cancelReservation = createCancelReservation(repository);
 
   await assert.rejects(
@@ -119,7 +138,7 @@ test("rejects cancellation when the reservation is already cancelled", async () 
   );
 
   assert.equal(repository.saveCalls, 0);
-  assert.equal(reservation.status, ReservationStatus.Cancelled);
+  assert.equal(cancelled.status, ReservationStatus.Cancelled);
 });
 
 test("rejects a member cancelling another member's reservation", async () => {

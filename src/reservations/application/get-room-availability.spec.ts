@@ -51,7 +51,7 @@ for (const role of [UserRole.Member, UserRole.OrganizationAdmin]) {
       startAt: "2030-05-10T12:00:00Z",
       endAt: "2030-05-10T13:00:00Z",
     });
-    cancelled.cancel();
+    const cancelledBooking = cancelled.cancel();
     const otherRoom = createStoredReservation({
       id: "other-room",
       roomId: "room-b",
@@ -59,7 +59,7 @@ for (const role of [UserRole.Member, UserRole.OrganizationAdmin]) {
       endAt: REQUEST.endAt,
     });
     const { useCase } = createContext({
-      reservations: [foreign, own, cancelled, otherRoom],
+      reservations: [foreign, own, cancelledBooking, otherRoom],
       authenticatedUser: {
         role,
         userId: "user-ana",

@@ -67,6 +67,8 @@ const ISO_UTC_PATTERN =
  * Here, a reservation brings together its owner, room, and validated period.
  * The period handles time rules, while the entity controls cancellation, rescheduling, and
  * decides whether active bookings compete for the same room.
+ * Cancellation and rescheduling return replacements, leaving the original safe
+ * until the application successfully saves the change.
  */
 export class Reservation {
   readonly id: string;
@@ -111,7 +113,7 @@ export class Reservation {
     return this.#status;
   }
 
-  cancel(): void {
+  cancel(): Reservation {
     if (!this.isActive()) {
       throw new InvalidReservationError(
         ReservationErrorCode.AlreadyCancelled,
@@ -119,7 +121,9 @@ export class Reservation {
       );
     }
 
-    this.#status = ReservationStatus.Cancelled;
+    const cancelled = new Reservation(this.toJSON(), this.#period);
+    cancelled.#status = ReservationStatus.Cancelled;
+    return cancelled;
   }
 
   /*
