@@ -14,8 +14,13 @@ import {
   type OrganizationReservationReader,
   type AffectedReservationReader,
   type AffectedReservationFilter,
+  type RoomScheduleReader,
   AdministrativeReservationScope,
 } from "./reservation-repository";
+import type {
+  RoomScheduleQuery,
+  TimeIntervalSnapshot,
+} from "../domain/room-availability";
 import type {
   Clock,
   IdGenerator,
@@ -37,7 +42,8 @@ export class InMemoryReservationRepository
   implements
     ReservationRepository,
     OrganizationReservationReader,
-    AffectedReservationReader
+    AffectedReservationReader,
+    RoomScheduleReader
 {
   readonly reservations: Reservation[];
   saveCalls = 0;
@@ -74,6 +80,25 @@ export class InMemoryReservationRepository
           reservation.status === ReservationStatus.Active,
       ),
     );
+  }
+
+  async findBusyIntervals(
+    query: RoomScheduleQuery,
+  ): Promise<readonly TimeIntervalSnapshot[]> {
+    const windowStartMs = new Date(query.startAt).getTime();
+    const windowEndMs = new Date(query.endAt).getTime();
+    return this.reservations
+      .filter(
+        (reservation) =>
+          reservation.roomId === query.roomId &&
+          reservation.status === ReservationStatus.Active &&
+          reservation.startAt.getTime() < windowEndMs &&
+          reservation.endAt.getTime() > windowStartMs,
+      )
+      .map((reservation) => ({
+        startAt: reservation.startAt.toISOString(),
+        endAt: reservation.endAt.toISOString(),
+      }));
   }
 
   async findFutureActive(

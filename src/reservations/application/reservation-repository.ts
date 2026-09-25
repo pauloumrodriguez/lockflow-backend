@@ -1,4 +1,8 @@
 import type { Reservation } from "../domain/reservation";
+import type {
+  RoomScheduleQuery,
+  TimeIntervalSnapshot,
+} from "../domain/room-availability";
 
 /*
  * Here, application use cases share a domain-oriented persistence contract.
@@ -24,6 +28,14 @@ export interface OrganizationReservationReader {
   findActiveByOrganization(
     organizationId: string,
   ): Promise<readonly Reservation[]>;
+}
+
+export interface RoomScheduleReader {
+  // Only active intervals intersecting this room/window, across all organizations.
+  // Do not return reservation IDs, organization IDs, or creator details.
+  findBusyIntervals(
+    query: RoomScheduleQuery,
+  ): Promise<readonly TimeIntervalSnapshot[]>;
 }
 
 export const AdministrativeReservationScope = {

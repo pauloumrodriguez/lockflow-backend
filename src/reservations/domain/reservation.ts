@@ -38,6 +38,7 @@ export const ReservationErrorCode = {
   InvalidTimeOrder: "INVALID_TIME_ORDER",
   DurationTooShort: "DURATION_TOO_SHORT",
   DurationTooLong: "DURATION_TOO_LONG",
+  InvalidDuration: "INVALID_DURATION",
   AlreadyCancelled: "RESERVATION_ALREADY_CANCELLED",
 } as const;
 
@@ -211,7 +212,8 @@ class ReservationPeriod {
   }
 }
 
-function validateRoomId(roomId: string): void {
+// Shared by reservations and availability searches so validation stays consistent.
+export function validateRoomId(roomId: string): void {
   if (!ROOM_ID_PATTERN.test(roomId)) {
     throw new InvalidReservationError(
       ReservationErrorCode.InvalidRoomId,
@@ -220,7 +222,7 @@ function validateRoomId(roomId: string): void {
   }
 }
 
-function parseUtcDate(value: string): number {
+export function parseUtcDate(value: string): number {
   const match = ISO_UTC_PATTERN.exec(value);
 
   if (!match) {
@@ -254,7 +256,7 @@ function parseUtcDate(value: string): number {
   return date.getTime();
 }
 
-function validateTimeOrder(startMs: number, endMs: number): void {
+export function validateTimeOrder(startMs: number, endMs: number): void {
   if (startMs >= endMs) {
     throw new InvalidReservationError(
       ReservationErrorCode.InvalidTimeOrder,
@@ -263,7 +265,7 @@ function validateTimeOrder(startMs: number, endMs: number): void {
   }
 }
 
-function validateDuration(startMs: number, endMs: number): void {
+export function validateDuration(startMs: number, endMs: number): void {
   const durationMs = endMs - startMs;
 
   if (durationMs < MIN_RESERVATION_DURATION_MS) {
