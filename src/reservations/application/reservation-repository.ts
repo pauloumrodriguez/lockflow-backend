@@ -18,3 +18,32 @@ export interface ReservationRepository {
   ): Promise<boolean>;
   save(reservation: Reservation): Promise<void>;
 }
+
+// Queries have separate ports so a read use case never needs write operations.
+export interface OrganizationReservationReader {
+  findActiveByOrganization(
+    organizationId: string,
+  ): Promise<readonly Reservation[]>;
+}
+
+export const AdministrativeReservationScope = {
+  Room: "room",
+  Organization: "organization",
+} as const;
+
+export type AffectedReservationFilter =
+  | {
+      readonly scope: typeof AdministrativeReservationScope.Room;
+      readonly roomId: string;
+    }
+  | {
+      readonly scope: typeof AdministrativeReservationScope.Organization;
+      readonly organizationId: string;
+    };
+
+export interface AffectedReservationReader {
+  findFutureActive(
+    filter: AffectedReservationFilter,
+    startsAtOrAfter: Date,
+  ): Promise<readonly Reservation[]>;
+}

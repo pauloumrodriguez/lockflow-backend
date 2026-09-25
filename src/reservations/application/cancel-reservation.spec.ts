@@ -11,10 +11,11 @@ import {
   ReservationErrorCode,
   ReservationStatus,
 } from "../domain/reservation";
+import { CancelReservation } from "./cancel-reservation";
 import {
-  CancelReservation,
-} from "./cancel-reservation";
-import { ReservationApplicationError, ReservationApplicationErrorCode } from "./reservation-application-error";
+  ReservationApplicationError,
+  ReservationApplicationErrorCode,
+} from "./reservation-application-error";
 import type { ReservationRepository } from "./reservation-repository";
 
 import {
@@ -34,9 +35,7 @@ const MEMBER_ANA: AuthenticatedUser = {
   role: UserRole.Member,
 };
 
-function createReservation(
-  options: TestReservationOptions = {},
-): Reservation {
+function createReservation(options: TestReservationOptions = {}): Reservation {
   return Reservation.create({
     id: options.id ?? "reservation-1",
     roomId: "room-a",

@@ -3,7 +3,10 @@ import {
   UserRole,
 } from "../../authentication/application/authentication-context";
 import type { ReservationSnapshot } from "../domain/reservation";
-import { ensureCanManageReservation, reservationNotFound } from "./reservation-access";
+import {
+  ensureCanManageReservation,
+  reservationNotFound,
+} from "./reservation-access";
 import type { ReservationRepository } from "./reservation-repository";
 
 export interface CancelReservationRequest {
@@ -23,9 +26,13 @@ export interface CancelReservationDependencies {
 export class CancelReservation {
   constructor(private readonly dependencies: CancelReservationDependencies) {}
 
-  async execute(request: CancelReservationRequest): Promise<ReservationSnapshot> {
+  async execute(
+    request: CancelReservationRequest,
+  ): Promise<ReservationSnapshot> {
     const user = this.dependencies.authenticationContext.getAuthenticatedUser();
-    const reservation = await this.dependencies.repository.findById(request.reservationId);
+    const reservation = await this.dependencies.repository.findById(
+      request.reservationId,
+    );
     if (!reservation) {
       throw reservationNotFound();
     }

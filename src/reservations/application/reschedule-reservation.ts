@@ -28,15 +28,21 @@ export interface RescheduleReservationDependencies extends ReservationBookingDep
 export class RescheduleReservation {
   private readonly bookingPolicy: ReservationBookingPolicy;
 
-  constructor(private readonly dependencies: RescheduleReservationDependencies) {
+  constructor(
+    private readonly dependencies: RescheduleReservationDependencies,
+  ) {
     this.bookingPolicy = new ReservationBookingPolicy(dependencies);
   }
 
-  async execute(request: RescheduleReservationRequest): Promise<ReservationSnapshot> {
+  async execute(
+    request: RescheduleReservationRequest,
+  ): Promise<ReservationSnapshot> {
     const user = requireOrganizationUser(
       this.dependencies.authenticationContext.getAuthenticatedUser(),
     );
-    const original = await this.dependencies.repository.findById(request.reservationId);
+    const original = await this.dependencies.repository.findById(
+      request.reservationId,
+    );
     if (!original) {
       throw reservationNotFound();
     }

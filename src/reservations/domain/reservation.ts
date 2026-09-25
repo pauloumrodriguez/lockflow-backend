@@ -76,7 +76,10 @@ export class Reservation {
   readonly #period: ReservationPeriod;
   #status: ReservationStatus = ReservationStatus.Active;
 
-  private constructor(input: CreateReservationInput, period: ReservationPeriod) {
+  private constructor(
+    input: CreateReservationInput,
+    period: ReservationPeriod,
+  ) {
     this.id = input.id;
     this.roomId = input.roomId;
     this.organizationId = input.organizationId;

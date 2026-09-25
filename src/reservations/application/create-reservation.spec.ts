@@ -2,15 +2,17 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 
 import { Reservation, ReservationStatus } from "../domain/reservation";
+import { UserRole } from "../../authentication/application/authentication-context";
+import { CreateReservation } from "./create-reservation";
 import {
-  UserRole,
-} from "../../authentication/application/authentication-context";
-import {
-  CreateReservation,
-} from "./create-reservation";
-import { ReservationApplicationError, ReservationApplicationErrorCode } from "./reservation-application-error";
+  ReservationApplicationError,
+  ReservationApplicationErrorCode,
+} from "./reservation-application-error";
 
-import { createDependencies, type TestContextOptions } from "./reservation.test-support";
+import {
+  createDependencies,
+  type TestContextOptions,
+} from "./reservation.test-support";
 
 /*
  * Each scenario starts with fresh collaborators and changes only relevant data.

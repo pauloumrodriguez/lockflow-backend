@@ -30,7 +30,9 @@ export class CreateReservation {
     this.bookingPolicy = new ReservationBookingPolicy(dependencies);
   }
 
-  async execute(request: CreateReservationRequest): Promise<ReservationSnapshot> {
+  async execute(
+    request: CreateReservationRequest,
+  ): Promise<ReservationSnapshot> {
     const user = requireOrganizationUser(
       this.dependencies.authenticationContext.getAuthenticatedUser(),
     );

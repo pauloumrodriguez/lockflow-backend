@@ -28,10 +28,16 @@ export class ReservationBookingPolicy {
   ): Promise<void> {
     // Capture time before asynchronous checks so both boundaries use one instant.
     const now = this.dependencies.clock.now();
-    await ensureRoomIsReservable(this.dependencies.roomAvailability, reservation.roomId);
+    await ensureRoomIsReservable(
+      this.dependencies.roomAvailability,
+      reservation.roomId,
+    );
     this.ensureStartIsWithinBookingWindow(reservation.startAt, now);
 
-    const hasOverlap = await this.dependencies.repository.hasOverlap(reservation, options);
+    const hasOverlap = await this.dependencies.repository.hasOverlap(
+      reservation,
+      options,
+    );
     if (hasOverlap) {
       throw new ReservationApplicationError(
         ReservationApplicationErrorCode.Overlap,
